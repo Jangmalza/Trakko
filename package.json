@@ -20,7 +20,8 @@
     "zustand": "^5.0.8",
     "express-session": "^1.17.3",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0"
+    "passport-google-oauth20": "^2.0.0",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

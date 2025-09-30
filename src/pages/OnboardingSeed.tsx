@@ -46,6 +46,12 @@ const OnboardingSeed: React.FC = () => {
     }
   }, [user, hasChecked, hasLoaded, initialSeed, navigate]);
 
+  useEffect(() => {
+    if (initialSeed !== null) {
+      setSeedInput(String(initialSeed));
+    }
+  }, [initialSeed]);
+
   const parsedSeed = Number(seedInput.replace(/,/g, ''));
   const isValid = !Number.isNaN(parsedSeed) && parsedSeed > 0;
 

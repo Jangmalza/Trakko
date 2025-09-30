@@ -24,8 +24,6 @@ const HeaderNavigation: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    const confirmed = window.confirm('로그아웃하면 다시 초기 자본을 입력해야 합니다. 계속할까요?');
-    if (!confirmed) return;
     await logout();
     navigate('/', { replace: true });
   };
@@ -68,3 +66,6 @@ const HeaderNavigation: React.FC = () => {
 };
 
 export default HeaderNavigation;
+
+
+
