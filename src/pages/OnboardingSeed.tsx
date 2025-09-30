@@ -81,7 +81,7 @@ const OnboardingSeed: React.FC = () => {
 
   if (!hasChecked || checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white text-slate-600">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-600">
         로그인 상태를 확인하는 중입니다...
       </div>
     );
@@ -89,26 +89,31 @@ const OnboardingSeed: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white text-slate-900">
-        <div className="space-y-6 rounded border border-slate-200 bg-white p-8 text-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 text-slate-900">
+        <div className="w-full max-w-sm space-y-8 rounded-3xl border border-slate-200 bg-white p-10 shadow-2xl">
           <TrakkoAuthHero />
-          <button
-            type="button"
-            onClick={handleLogin}
-            className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            Google 로그인
-          </button>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={handleLogin}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              <span className="text-base">Google 로그인</span>
+            </button>
+            <p className="text-xs text-slate-400">
+              Google 계정 인증만 사용하며, 이메일 외의 개인정보는 저장하지 않습니다.
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
-      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-8 px-6 py-12">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-10 px-6 py-12">
         <TrakkoAuthHero />
-        <header className="space-y-2">
+        <header className="space-y-2 text-center">
           <p className="text-xs uppercase tracking-wide text-slate-500">Welcome</p>
           <h1 className="text-2xl font-semibold">시작 자본을 입력하세요</h1>
           <p className="text-sm text-slate-500">
