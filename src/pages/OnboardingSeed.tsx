@@ -69,12 +69,6 @@ const OnboardingSeed: React.FC = () => {
     }
   };
 
-  const handleReset = () => {
-    setSeedInput('');
-    setTouched(false);
-    clearError();
-  };
-
   const handleLogin = () => {
     window.location.href = getLoginUrl();
   };
@@ -149,22 +143,13 @@ const OnboardingSeed: React.FC = () => {
             <p className="text-xs text-red-500">{error}</p>
           )}
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="flex-1 rounded border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
-            >
-              초기화
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition disabled:bg-slate-300"
-            >
-              {loading ? '저장 중...' : '일지로 이동'}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition disabled:bg-slate-300"
+          >
+            {loading ? '저장 중...' : '일지로 이동'}
+          </button>
         </form>
       </div>
     </div>
