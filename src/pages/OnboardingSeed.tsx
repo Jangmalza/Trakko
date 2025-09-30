@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { APP_CURRENCY } from '../config/appConfig';
 import { formatCurrency } from '../utils/formatCurrency';
 import { usePortfolioStore } from '../store/portfolioStore';
+import { useAuthStore } from '../store/authStore';
 
 const OnboardingSeed: React.FC = () => {
   const navigate = useNavigate();
@@ -15,20 +16,35 @@ const OnboardingSeed: React.FC = () => {
     hasLoaded,
     clearError
   } = usePortfolioStore();
+  const {
+    user,
+    checking,
+    hasChecked,
+    bootstrap,
+    getLoginUrl
+  } = useAuthStore();
   const [seedInput, setSeedInput] = useState('');
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
+    if (!hasChecked && !checking) {
+      void bootstrap();
+    }
+  }, [bootstrap, hasChecked, checking]);
+
+  useEffect(() => {
+    if (!user || !hasChecked) return;
     if (!hasLoaded) {
       void loadPortfolio();
     }
-  }, [hasLoaded, loadPortfolio]);
+  }, [user, hasChecked, hasLoaded, loadPortfolio]);
 
   useEffect(() => {
+    if (!user || !hasChecked) return;
     if (hasLoaded && initialSeed !== null) {
       navigate('/dashboard', { replace: true });
     }
-  }, [hasLoaded, initialSeed, navigate]);
+  }, [user, hasChecked, hasLoaded, initialSeed, navigate]);
 
   const parsedSeed = Number(seedInput.replace(/,/g, ''));
   const isValid = !Number.isNaN(parsedSeed) && parsedSeed > 0;
@@ -52,13 +68,47 @@ const OnboardingSeed: React.FC = () => {
     clearError();
   };
 
+  const handleLogin = () => {
+    window.location.href = getLoginUrl();
+  };
+
+  if (!hasChecked || checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white text-slate-600">
+        로그인 상태를 확인하는 중입니다...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white text-slate-900">
+        <div className="space-y-6 rounded border border-slate-200 bg-white p-8 text-center">
+          <h1 className="text-xl font-semibold">Google 로그인 후 이용 가능합니다</h1>
+          <p className="text-sm text-slate-500">
+            투자 일지를 저장하려면 Google 계정으로 로그인하세요. 로그인 이후에도 모든 데이터는 계정별로 안전하게 보관됩니다.
+          </p>
+          <button
+            type="button"
+            onClick={handleLogin}
+            className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          >
+            Google 로그인
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-8 px-6 py-12">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-500">Welcome</p>
           <h1 className="text-2xl font-semibold">시작 자본을 입력하세요</h1>
-          <p className="text-sm text-slate-500">투자 일지를 기록하기 전에 초기 시드를 입력합니다. 이후에도 설정 화면에서 변경할 수 있습니다.</p>
+          <p className="text-sm text-slate-500">
+            투자 일지를 기록하기 전에 초기 시드를 입력합니다. 이후에도 설정 화면에서 변경할 수 있습니다.
+          </p>
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-4">

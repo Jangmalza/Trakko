@@ -39,11 +39,16 @@ npm run dev    # http://localhost:5173 에서 프런트 개발 서버 실행
 
 ## 환경 변수
 
-- `VITE_API_BASE_URL` : 기본값 `http://localhost:4000/api`
-- `VITE_APP_LOCALE` : 통화 포맷에 사용할 로케일 (기본 `en-US`)
-- `VITE_APP_CURRENCY` : 표시 통화 코드 (기본 `USD`)
-
-추후 Google 로그인 등 인증 기능을 추가할 경우 관련 클라이언트 ID/비밀키도 환경 변수로 관리하는 것을 권장합니다.
+| 변수 | 설명 |
+| --- | --- |
+| `VITE_API_BASE_URL` | 프런트에서 호출할 API 주소 (기본 `http://localhost:4000/api`) |
+| `VITE_APP_LOCALE` | 통화 포맷에 사용할 로케일 (기본 `en-US`) |
+| `VITE_APP_CURRENCY` | 표시 통화 코드 (기본 `USD`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth 클라이언트 ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 클라이언트 비밀키 |
+| `GOOGLE_CALLBACK_URL` | Google OAuth 콜백 URL (미지정 시 `http://localhost:4000/api/auth/google/callback`) |
+| `CLIENT_BASE_URL` | 프런트엔드 베이스 URL (기본 `http://localhost:5173`) |
+| `SESSION_SECRET` | Express 세션 서명에 사용할 비밀키 |
 
 ## 라이선스
 
