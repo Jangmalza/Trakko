@@ -1,0 +1,201 @@
+﻿import React, { useEffect, useMemo, useState } from 'react';
+import type { NewTradeEntry, TradeEntry } from '../../data/portfolioTypes';
+import { formatSignedCurrency } from '../../utils/formatCurrency';
+import { usePreferencesStore } from '../../store/preferencesStore';
+
+interface EditTradeModalProps {
+  open: boolean;
+  trade: TradeEntry | null;
+  submitting: boolean;
+  deleteSubmitting: boolean;
+  errorMessage: string | null;
+  onSave: (values: NewTradeEntry) => Promise<void>;
+  onDelete: () => Promise<void>;
+  onCancel: () => void;
+}
+
+const TITLE = '거래 수정';
+const DESCRIPTION = '거래 정보를 업데이트하거나 필요하지 않은 기록은 삭제할 수 있습니다.';
+const TICKER_LABEL = '티커';
+const PROFIT_LABEL = '손익';
+const DATE_LABEL = '거래 날짜';
+const NOTE_LABEL = '메모';
+const SAVE_LABEL = '저장';
+const DELETE_LABEL = '삭제';
+const CANCEL_LABEL = '취소';
+const DELETE_CONFIRM = '이 거래를 삭제하시겠습니까? 삭제 후에는 되돌릴 수 없습니다.';
+
+const EditTradeModal: React.FC<EditTradeModalProps> = ({
+  open,
+  trade,
+  submitting,
+  deleteSubmitting,
+  errorMessage,
+  onSave,
+  onDelete,
+  onCancel
+}) => {
+  const currency = usePreferencesStore((state) => state.currency);
+  const [ticker, setTicker] = useState('');
+  const [profitLoss, setProfitLoss] = useState('');
+  const [tradeDate, setTradeDate] = useState('');
+  const [rationale, setRationale] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!trade) {
+      setTicker('');
+      setProfitLoss('');
+      setTradeDate('');
+      setRationale('');
+      setLocalError(null);
+      return;
+    }
+
+    setTicker(trade.ticker);
+    setProfitLoss(String(trade.profitLoss));
+    setTradeDate(trade.tradeDate);
+    setRationale(trade.rationale ?? '');
+    setLocalError(null);
+  }, [trade]);
+
+  const parsedProfitLoss = useMemo(() => {
+    const sanitized = profitLoss.replace(/,/g, '');
+    const value = Number(sanitized);
+    return Number.isFinite(value) ? value : NaN;
+  }, [profitLoss]);
+
+  const isValid =
+    ticker.trim() !== '' &&
+    !Number.isNaN(parsedProfitLoss) &&
+    tradeDate.trim() !== '';
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!isValid || !trade || deleteSubmitting) {
+      setLocalError('티커, 손익, 날짜를 모두 입력해주세요.');
+      return;
+    }
+
+    try {
+      await onSave({
+        ticker: ticker.trim(),
+        profitLoss: parsedProfitLoss,
+        rationale: rationale.trim(),
+        tradeDate
+      });
+    } catch {
+      // 오류는 상위 컴포넌트에서 처리
+    }
+  };
+
+  if (!open || !trade) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-md rounded-lg bg-white p-6 text-sm text-slate-700 shadow-xl"
+      >
+        <h2 className="text-base font-semibold text-slate-900">{TITLE}</h2>
+        <p className="mt-2 text-xs text-slate-500">{DESCRIPTION}</p>
+
+        <div className="mt-4 space-y-3">
+          <label className="block text-xs font-medium text-slate-600">
+            {TICKER_LABEL}
+            <input
+              type="text"
+              value={ticker}
+              onChange={(event) => {
+                setTicker(event.target.value.toUpperCase());
+                setLocalError(null);
+              }}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+            />
+          </label>
+
+          <label className="block text-xs font-medium text-slate-600">
+            {PROFIT_LABEL} ({currency})
+            <input
+              type="text"
+              value={profitLoss}
+              onChange={(event) => {
+                setProfitLoss(event.target.value.replace(/[^0-9+-.,]/g, ''));
+                setLocalError(null);
+              }}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+            />
+          </label>
+
+          <label className="block text-xs font-medium text-slate-600">
+            {DATE_LABEL}
+            <input
+              type="date"
+              value={tradeDate}
+              onChange={(event) => {
+                setTradeDate(event.target.value);
+                setLocalError(null);
+              }}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+            />
+          </label>
+
+          <label className="block text-xs font-medium text-slate-600">
+            {NOTE_LABEL}
+            <textarea
+              value={rationale}
+              onChange={(event) => setRationale(event.target.value)}
+              rows={4}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+              placeholder="어떤 판단으로 거래했는지 자유롭게 적어주세요."
+            />
+          </label>
+
+          {isValid && !Number.isNaN(parsedProfitLoss) && (
+            <p className="text-xs text-slate-500">손익 미리보기: {formatSignedCurrency(parsedProfitLoss)}</p>
+          )}
+
+          {(localError || errorMessage) && (
+            <p className="text-xs text-red-500">{localError ?? errorMessage}</p>
+          )}
+        </div>
+
+        <div className="mt-6 space-y-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={submitting || deleteSubmitting}
+              className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {CANCEL_LABEL}
+            </button>
+            <button
+              type="submit"
+              disabled={!isValid || submitting || deleteSubmitting}
+              className="flex-1 rounded bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {submitting ? '저장 중...' : SAVE_LABEL}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              if (deleteSubmitting || submitting) return;
+              if (!window.confirm(DELETE_CONFIRM)) return;
+              await onDelete();
+            }}
+            disabled={deleteSubmitting || submitting}
+            className="w-full rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {deleteSubmitting ? '삭제 중...' : DELETE_LABEL}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+export default EditTradeModal;

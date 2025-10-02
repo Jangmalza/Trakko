@@ -459,6 +459,101 @@ app.post('/api/portfolio/trades', requireAuth, async (req, res) => {
   }
 });
 
+app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
+  try {
+    const { tradeId } = req.params;
+    const {
+      ticker,
+      profitLoss,
+      rationale = '',
+      tradeDate,
+      currency
+    } = req.body ?? {};
+
+    if (typeof ticker !== 'string' || ticker.trim() === '') {
+      return res.status(400).json({ message: '티커를 입력해주세요.' });
+    }
+
+    const profitLossValue = Number(profitLoss);
+    if (!Number.isFinite(profitLossValue)) {
+      return res.status(400).json({ message: '손익 금액은 숫자여야 합니다.' });
+    }
+
+    if (typeof tradeDate !== 'string' || tradeDate.trim() === '') {
+      return res.status(400).json({ message: '거래 날짜를 입력해주세요.' });
+    }
+
+    const portfolio = await readPortfolioForUser(req.user.id);
+    const existingTrade = portfolio.trades.find((trade) => trade.id === tradeId);
+
+    if (!existingTrade) {
+      return res.status(404).json({ message: '거래를 찾을 수 없습니다.' });
+    }
+
+    const baseCurrency = portfolio.baseCurrency ?? BASE_CURRENCY;
+    const sourceCurrency = normalizeCurrency(currency ?? portfolio.preferences?.currency);
+    const profitLossInBase = await convertAmount(profitLossValue, sourceCurrency, baseCurrency);
+
+    const updatedTrade = {
+      ...existingTrade,
+      ticker: ticker.trim().toUpperCase(),
+      profitLoss: profitLossInBase,
+      rationale: String(rationale ?? ''),
+      tradeDate
+    };
+
+    const nextTrades = portfolio.trades
+      .map((trade) => (trade.id === tradeId ? updatedTrade : trade))
+      .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+
+    const next = {
+      ...portfolio,
+      trades: nextTrades
+    };
+
+    await writePortfolioForUser(req.user.id, next);
+
+    const profitLossDisplay = await convertAmount(
+      updatedTrade.profitLoss,
+      baseCurrency,
+      portfolio.preferences.currency
+    );
+
+    res.json({
+      ...updatedTrade,
+      profitLoss: profitLossDisplay,
+      currency: portfolio.preferences.currency
+    });
+  } catch (error) {
+    console.error('Failed to update trade', error);
+    res.status(500).json({ message: '거래를 수정하지 못했습니다.' });
+  }
+});
+
+app.delete('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
+  try {
+    const { tradeId } = req.params;
+    const portfolio = await readPortfolioForUser(req.user.id);
+    const exists = portfolio.trades.some((trade) => trade.id === tradeId);
+
+    if (!exists) {
+      return res.status(404).json({ message: '거래를 찾을 수 없습니다.' });
+    }
+
+    const nextTrades = portfolio.trades.filter((trade) => trade.id !== tradeId);
+    const next = {
+      ...portfolio,
+      trades: nextTrades
+    };
+
+    await writePortfolioForUser(req.user.id, next);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to delete trade', error);
+    res.status(500).json({ message: '거래를 삭제하지 못했습니다.' });
+  }
+});
+
 app.get('/api/preferences', requireAuth, async (req, res) => {
   try {
     const portfolio = await readPortfolioForUser(req.user.id);
@@ -596,3 +691,4 @@ async function start() {
 }
 
 start();
+

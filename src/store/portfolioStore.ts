@@ -1,6 +1,6 @@
 ﻿import { create } from 'zustand';
 import type { NewTradeEntry, TradeEntry } from '../data/portfolioTypes';
-import { createTradeEntry, fetchPortfolio, resetPortfolio, upsertInitialSeed } from '../api/portfolioApi';
+import { createTradeEntry, fetchPortfolio, resetPortfolio, upsertInitialSeed, updateTradeEntry, deleteTradeEntry } from '../api/portfolioApi';
 import { usePreferencesStore } from './preferencesStore';
 import type { SupportedCurrency } from '../types/preferences';
 
@@ -17,6 +17,8 @@ interface PortfolioState {
   loadPortfolio: () => Promise<void>;
   setInitialSeed: (seed: number) => Promise<void>;
   addTrade: (payload: NewTradeEntry) => Promise<void>;
+  updateTrade: (tradeId: string, payload: NewTradeEntry) => Promise<void>;
+  deleteTrade: (tradeId: string) => Promise<void>;
   resetData: () => Promise<void>;
   logout: () => void;
   clearError: () => void;
@@ -85,15 +87,57 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
     try {
       const currency = usePreferencesStore.getState().currency;
       const trade = await createTradeEntry({ ...payload, currency });
-      set((state) => {
-        const updatedTrades = [...state.trades, trade].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
-        return {
-          trades: updatedTrades,
-          loading: false
+     set((state) => {
+       const updatedTrades = [...state.trades, trade].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+       return {
+         trades: updatedTrades,
+          loading: false,
+          hasLoaded: true,
+          error: null
         };
       });
     } catch (error) {
       console.error('Failed to add trade', error);
+      set({ loading: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
+  },
+
+  updateTrade: async (tradeId: string, payload: NewTradeEntry) => {
+    set({ loading: true, error: null });
+    try {
+      const currency = usePreferencesStore.getState().currency;
+      const updated = await updateTradeEntry(tradeId, { ...payload, currency });
+      set((state) => {
+        const updatedTrades = state.trades
+          .map((trade) => (trade.id === tradeId ? updated : trade))
+          .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+        return {
+          trades: updatedTrades,
+          loading: false,
+          hasLoaded: true,
+          error: null
+        };
+      });
+    } catch (error) {
+      console.error('Failed to update trade', error);
+      set({ loading: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      throw error;
+    }
+  },
+
+  deleteTrade: async (tradeId: string) => {
+    set({ loading: true, error: null });
+    try {
+      await deleteTradeEntry(tradeId);
+      set((state) => ({
+        trades: state.trades.filter((trade) => trade.id !== tradeId),
+        loading: false,
+        hasLoaded: true,
+        error: null
+      }));
+    } catch (error) {
+      console.error('Failed to delete trade', error);
       set({ loading: false, error: error instanceof Error ? error.message : 'Unknown error' });
       throw error;
     }
