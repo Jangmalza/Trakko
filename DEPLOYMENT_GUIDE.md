@@ -1,12 +1,12 @@
-ï»¿# Deployment Guide (Ubuntu)
+# Deployment Guide (Ubuntu)
 
-## 1. ì‹œìŠ¤í…œ ìš”êµ¬ ì‚¬í•­
-- Ubuntu 22.04 LTS ì´ìƒ
+## 1. ½Ã½ºÅÛ ¿ä±¸ »çÇ×
+- Ubuntu 22.04 LTS ÀÌ»ó
 - Node.js 18.x (LTS)
-- npm 10.x (Node 18ì— í¬í•¨)
-- git, unzip ë“± ê¸°ë³¸ ìœ í‹¸ë¦¬í‹°
+- npm 10.x (Node 18¿¡ Æ÷ÇÔ)
+- git, unzip µî ±âº» À¯Æ¿¸®Æ¼
 
-## 2. Node.js & npm ì„¤ì¹˜
+## 2. Node.js & npm ¼³Ä¡
 ```
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs git
@@ -14,15 +14,15 @@ node -v
 npm -v
 ```
 
-## 3. í”„ë¡œì íŠ¸ ë°°í¬ ì¤€ë¹„
+## 3. ÇÁ·ÎÁ§Æ® ¹èÆ÷ ÁØºñ
 ```
 git clone https://github.com/Jangmalza/Trakko.git
 cd Trakko
 npm install
 ```
 
-## 4. í™˜ê²½ ë³€ìˆ˜ ì„¤ì •
-`server/.env`ì™€ í”„ë¡œì íŠ¸ ë£¨íŠ¸ì˜ `.env`ë¥¼ ì‘ì„±í•©ë‹ˆë‹¤. ì˜ˆì‹œëŠ” ì•„ë˜ì™€ ê°™ìŠµë‹ˆë‹¤.
+## 4. È¯°æ º¯¼ö ¼³Á¤
+`server/.env`¿Í ÇÁ·ÎÁ§Æ® ·çÆ®ÀÇ `.env`¸¦ ÀÛ¼ºÇÕ´Ï´Ù. ¿¹½Ã´Â ¾Æ·¡¿Í °°½À´Ï´Ù.
 
 **server/.env**
 ```
@@ -33,29 +33,33 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_CALLBACK_URL=https://api.your-domain/api/auth/google/callback
 API_BASE_URL=https://api.your-domain
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-4o-mini
 ```
 
 **.env**
 ```
-VITE_API_BASE_URL=https://api.your-domain/api
+VITE_API_BASE_URL=https://api.your-domain
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-4o-mini/api
 VITE_APP_LOCALE=ko-KR
 VITE_APP_CURRENCY=KRW
 VITE_GOOGLE_CLIENT_ID=...
 ```
 
-## 5. í”„ëŸ°íŠ¸ì—”ë“œ ë¹Œë“œ
+## 5. ÇÁ·±Æ®¿£µå ºôµå
 ```
 npm run build
 ```
-`dist/` í´ë”ê°€ ìƒì„±ë˜ë©°, ì •ì  ì›¹ ì„œë²„(Nginx, S3 ë“±)ë¡œ ë°°í¬í•©ë‹ˆë‹¤.
+`dist/` Æú´õ°¡ »ı¼ºµÇ¸ç, Á¤Àû À¥ ¼­¹ö(Nginx, S3 µî)·Î ¹èÆ÷ÇÕ´Ï´Ù.
 
-## 6. ë°±ì—”ë“œ ì„œë²„ ì‹¤í–‰
+## 6. ¹é¿£µå ¼­¹ö ½ÇÇà
 ```
 npm run server
 ```
-ìš´ì˜ í™˜ê²½ì—ì„œëŠ” PM2 ë˜ëŠ” systemdë¡œ í”„ë¡œì„¸ìŠ¤ë¥¼ ê´€ë¦¬í•˜ëŠ” ê²ƒì„ ê¶Œì¥í•©ë‹ˆë‹¤.
+¿î¿µ È¯°æ¿¡¼­´Â PM2 ¶Ç´Â systemd·Î ÇÁ·Î¼¼½º¸¦ °ü¸®ÇÏ´Â °ÍÀ» ±ÇÀåÇÕ´Ï´Ù.
 
-**PM2 ì˜ˆì‹œ**
+**PM2 ¿¹½Ã**
 ```
 npm install -g pm2
 pm2 start server/index.js --name trakko-api
@@ -63,7 +67,7 @@ pm2 save
 pm2 startup
 ```
 
-## 7. ë¦¬ë²„ìŠ¤ í”„ë¡ì‹œ(Nginx ì˜ˆì‹œ)
+## 7. ¸®¹ö½º ÇÁ·Ï½Ã(Nginx ¿¹½Ã)
 ```
 server {
     listen 80;
@@ -79,7 +83,7 @@ server {
 }
 ```
 
-## 8. HTTPS ì ìš© (Letâ€™s Encrypt)
+## 8. HTTPS Àû¿ë (Let¡¯s Encrypt)
 ```
 sudo apt install snapd
 sudo snap install core; sudo snap refresh core
@@ -88,11 +92,11 @@ sudo ln -s /snap/bin/certbot /usr/bin/certbot
 sudo certbot --nginx -d api.your-domain -d your-domain
 ```
 
-## 9. ë¡œê·¸ì™€ ëª¨ë‹ˆí„°ë§
-- Express ì„œë²„ ë¡œê·¸: PM2, systemd journal ë“± í™œìš©
-- í”„ëŸ°íŠ¸ ì—ëŸ¬ ëª¨ë‹ˆí„°ë§: Sentry/LogRocket ë“± ì—°ë™ ê³ ë ¤
+## 9. ·Î±×¿Í ¸ğ´ÏÅÍ¸µ
+- Express ¼­¹ö ·Î±×: PM2, systemd journal µî È°¿ë
+- ÇÁ·±Æ® ¿¡·¯ ¸ğ´ÏÅÍ¸µ: Sentry/LogRocket µî ¿¬µ¿ °í·Á
 
-## 10. ë°±ì—… ë° ìœ ì§€ ê´€ë¦¬
-- `server/data/portfolio-*.json` íŒŒì¼ì€ ì‚¬ìš©ìë³„ íˆ¬ì ë°ì´í„°ì…ë‹ˆë‹¤. ì •ê¸° ë°±ì—…ì„ ê¶Œì¥í•©ë‹ˆë‹¤.
-- `npm audit`ìœ¼ë¡œ ì˜ì¡´ì„± ë³´ì•ˆ ì´ìŠˆë¥¼ ì£¼ê¸°ì ìœ¼ë¡œ í™•ì¸í•˜ì„¸ìš”.
+## 10. ¹é¾÷ ¹× À¯Áö °ü¸®
+- `server/data/portfolio-*.json` ÆÄÀÏÀº »ç¿ëÀÚº° ÅõÀÚ µ¥ÀÌÅÍÀÔ´Ï´Ù. Á¤±â ¹é¾÷À» ±ÇÀåÇÕ´Ï´Ù.
+- `npm audit`À¸·Î ÀÇÁ¸¼º º¸¾È ÀÌ½´¸¦ ÁÖ±âÀûÀ¸·Î È®ÀÎÇÏ¼¼¿ä.
 

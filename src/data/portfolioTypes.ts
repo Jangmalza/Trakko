@@ -1,3 +1,5 @@
+﻿import type { SupportedCurrency } from '../types/preferences';
+
 export interface TradeEntry {
   id: string;
   ticker: string;
@@ -5,6 +7,7 @@ export interface TradeEntry {
   rationale: string;
   tradeDate: string;
   createdAt: string;
+  currency?: SupportedCurrency;
 }
 
 export interface NewTradeEntry {
@@ -17,4 +20,7 @@ export interface NewTradeEntry {
 export interface PortfolioSnapshot {
   initialSeed: number | null;
   trades: TradeEntry[];
+  baseCurrency: SupportedCurrency;
+  displayCurrency: SupportedCurrency;
+  exchangeRate?: number;
 }

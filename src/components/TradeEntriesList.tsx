@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { APP_CURRENCY } from '../config/appConfig';
 import type { TradeEntry } from '../data/portfolioTypes';
 import { formatCurrency, formatSignedCurrency } from '../utils/formatCurrency';
+import { usePreferencesStore } from '../store/preferencesStore';
 
 interface TradeEntriesListProps {
   initialSeed: number;
@@ -18,6 +18,7 @@ const PROFIT_LABEL = '손익';
 const LOGGED_LABEL = '기록 시간';
 
 const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades }) => {
+  const currency = usePreferencesStore((state) => state.currency);
   const { totalPnL, currentSeed } = useMemo(() => {
     const total = trades.reduce((acc, trade) => acc + trade.profitLoss, 0);
     return {
@@ -36,15 +37,15 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
     <section className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">{INITIAL_SEED_LABEL} ({APP_CURRENCY})</p>
+          <p className="text-xs text-slate-500">{INITIAL_SEED_LABEL} ({currency})</p>
           <p className="mt-1 text-xl font-semibold text-slate-900">{formatCurrency(initialSeed)}</p>
         </div>
         <div className="rounded border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">{TOTAL_PNL_LABEL} ({APP_CURRENCY})</p>
+          <p className="text-xs text-slate-500">{TOTAL_PNL_LABEL} ({currency})</p>
           <p className={'mt-1 text-xl font-semibold ' + totalTone}>{formatSignedCurrency(totalPnL)}</p>
         </div>
         <div className="rounded border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">{CURRENT_CAPITAL_LABEL} ({APP_CURRENCY})</p>
+          <p className="text-xs text-slate-500">{CURRENT_CAPITAL_LABEL} ({currency})</p>
           <p className="mt-1 text-xl font-semibold text-slate-900">{formatCurrency(currentSeed)}</p>
         </div>
       </div>
@@ -73,7 +74,7 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-xs text-slate-500">{PROFIT_LABEL} ({APP_CURRENCY})</p>
+                        <p className="text-xs text-slate-500">{PROFIT_LABEL} ({currency})</p>
                         <p className={'mt-1 text-sm font-semibold ' + tone}>{formatSignedCurrency(trade.profitLoss)}</p>
                       </div>
                       <p className="text-xs text-slate-400">{LOGGED_LABEL} {new Date(trade.createdAt).toLocaleString()}</p>

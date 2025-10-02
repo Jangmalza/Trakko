@@ -1,4 +1,5 @@
 ﻿import type { NewTradeEntry, PortfolioSnapshot, TradeEntry } from '../data/portfolioTypes';
+import type { SupportedCurrency } from '../types/preferences';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api';
 
@@ -15,25 +16,25 @@ export async function fetchPortfolio(): Promise<PortfolioSnapshot> {
     credentials: 'include'
   });
 
-  if (response.status === 401) {
-    throw new Error('Unauthorized');
-  }
-
   return handleResponse<PortfolioSnapshot>(response);
 }
 
-export async function upsertInitialSeed(initialSeed: number): Promise<PortfolioSnapshot> {
+export async function upsertInitialSeed(initialSeed: number, currency: SupportedCurrency): Promise<PortfolioSnapshot> {
   const response = await fetch(`${API_BASE_URL}/portfolio/seed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ initialSeed }),
+    body: JSON.stringify({ initialSeed, currency }),
     credentials: 'include'
   });
 
   return handleResponse<PortfolioSnapshot>(response);
 }
 
-export async function createTradeEntry(payload: NewTradeEntry): Promise<TradeEntry> {
+interface CreateTradePayload extends NewTradeEntry {
+  currency: SupportedCurrency;
+}
+
+export async function createTradeEntry(payload: CreateTradePayload): Promise<TradeEntry> {
   const response = await fetch(`${API_BASE_URL}/portfolio/trades`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

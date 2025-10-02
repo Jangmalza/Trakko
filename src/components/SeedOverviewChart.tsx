@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { TradeEntry } from '../data/portfolioTypes';
-import { APP_CURRENCY } from '../config/appConfig';
 import { formatCurrency } from '../utils/formatCurrency';
+import { usePreferencesStore } from '../store/preferencesStore';
 
 interface SeedOverviewChartProps {
   initialSeed: number;
@@ -18,6 +18,7 @@ const CHART_TITLE = '자본 추이';
 const CHART_SUBTITLE = '초기 시드와 누적 손익을 기준으로 계산합니다.';
 
 const SeedOverviewChart: React.FC<SeedOverviewChartProps> = ({ initialSeed, trades }) => {
+  const currency = usePreferencesStore((state) => state.currency);
   const data = useMemo<ChartPoint[]>(() => {
     let running = initialSeed;
     const sorted = [...trades].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
@@ -35,7 +36,7 @@ const SeedOverviewChart: React.FC<SeedOverviewChartProps> = ({ initialSeed, trad
   return (
     <div className="rounded border border-slate-200 bg-white p-6">
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-slate-900">{CHART_TITLE} ({APP_CURRENCY})</h2>
+        <h2 className="text-base font-semibold text-slate-900">{CHART_TITLE} ({currency})</h2>
         <p className="mt-1 text-xs text-slate-500">{CHART_SUBTITLE}</p>
       </div>
       <ResponsiveContainer width="100%" height={240}>

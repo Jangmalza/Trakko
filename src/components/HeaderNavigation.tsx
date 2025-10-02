@@ -31,7 +31,7 @@ const HeaderNavigation: React.FC = () => {
   return (
     <nav className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
       <Link to="/dashboard" className="text-sm font-semibold text-slate-900">
-        Trakko
+        TRAKKO
       </Link>
       <div className="flex items-center gap-4 text-sm">
         <Link to="/dashboard" className="text-slate-600 hover:text-slate-900">

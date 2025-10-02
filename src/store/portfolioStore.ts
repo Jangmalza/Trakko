@@ -1,17 +1,15 @@
 ﻿import { create } from 'zustand';
 import type { NewTradeEntry, TradeEntry } from '../data/portfolioTypes';
 import { createTradeEntry, fetchPortfolio, resetPortfolio, upsertInitialSeed } from '../api/portfolioApi';
-
-const STORAGE_KEY = 'trakko_portfolio_cache';
-
-interface PersistedPortfolio {
-  initialSeed: number | null;
-  trades: TradeEntry[];
-}
+import { usePreferencesStore } from './preferencesStore';
+import type { SupportedCurrency } from '../types/preferences';
 
 interface PortfolioState {
   initialSeed: number | null;
   trades: TradeEntry[];
+  baseCurrency: SupportedCurrency;
+  displayCurrency: SupportedCurrency;
+  exchangeRate: number | null;
   loading: boolean;
   error: string | null;
   hasLoaded: boolean;
@@ -24,78 +22,56 @@ interface PortfolioState {
   clearError: () => void;
 }
 
-const readPersistedPortfolio = (): PersistedPortfolio | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistedPortfolio;
-    if (!('trades' in parsed)) return null;
-    return parsed;
-  } catch (error) {
-    console.warn('Failed to read cached portfolio', error);
-    return null;
-  }
-};
+const BASE_CURRENCY_DEFAULT: SupportedCurrency = 'KRW';
 
-const persistPortfolio = (initialSeed: number | null, trades: TradeEntry[]) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ initialSeed, trades })
-    );
-  } catch (error) {
-    console.warn('Failed to persist portfolio cache', error);
-  }
-};
-
-const cached = readPersistedPortfolio();
-
-export const usePortfolioStore = create<PortfolioState>((set) => ({
-  initialSeed: cached?.initialSeed ?? null,
-  trades: cached?.trades ?? [],
+export const usePortfolioStore = create<PortfolioState>((set, get) => ({
+  initialSeed: null,
+  trades: [],
+  baseCurrency: BASE_CURRENCY_DEFAULT,
+  displayCurrency: usePreferencesStore.getState().currency,
+  exchangeRate: null,
   loading: false,
   error: null,
-  hasLoaded: Boolean(cached),
+  hasLoaded: false,
 
   loadPortfolio: async () => {
     set({ loading: true, error: null });
     try {
       const snapshot = await fetchPortfolio();
-      set(() => {
-        persistPortfolio(snapshot.initialSeed, snapshot.trades);
-        return {
-          initialSeed: snapshot.initialSeed,
-          trades: snapshot.trades,
-          loading: false,
-          hasLoaded: true,
-          error: null
-        };
+      set({
+        initialSeed: snapshot.initialSeed,
+        trades: snapshot.trades,
+        baseCurrency: snapshot.baseCurrency,
+        displayCurrency: snapshot.displayCurrency,
+        exchangeRate: snapshot.exchangeRate ?? null,
+        loading: false,
+        hasLoaded: true,
+        error: null
       });
     } catch (error) {
       console.error('Failed to load portfolio', error);
-      set((state) => ({
+      set({
         loading: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        hasLoaded: state.hasLoaded || Boolean(state.initialSeed !== null || state.trades.length > 0)
-      }));
+        hasLoaded: get().hasLoaded
+      });
     }
   },
 
   setInitialSeed: async (seed: number) => {
     set({ loading: true, error: null });
     try {
-      const snapshot = await upsertInitialSeed(seed);
-      set(() => {
-        persistPortfolio(snapshot.initialSeed, snapshot.trades);
-        return {
-          initialSeed: snapshot.initialSeed,
-          trades: snapshot.trades,
-          loading: false,
-          hasLoaded: true,
-          error: null
-        };
+      const currency = usePreferencesStore.getState().currency;
+      const snapshot = await upsertInitialSeed(seed, currency);
+      set({
+        initialSeed: snapshot.initialSeed,
+        trades: snapshot.trades,
+        baseCurrency: snapshot.baseCurrency,
+        displayCurrency: snapshot.displayCurrency,
+        exchangeRate: snapshot.exchangeRate ?? null,
+        loading: false,
+        hasLoaded: true,
+        error: null
       });
     } catch (error) {
       console.error('Failed to set initial seed', error);
@@ -107,10 +83,10 @@ export const usePortfolioStore = create<PortfolioState>((set) => ({
   addTrade: async (payload: NewTradeEntry) => {
     set({ loading: true, error: null });
     try {
-      const trade = await createTradeEntry(payload);
+      const currency = usePreferencesStore.getState().currency;
+      const trade = await createTradeEntry({ ...payload, currency });
       set((state) => {
         const updatedTrades = [...state.trades, trade].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
-        persistPortfolio(state.initialSeed, updatedTrades);
         return {
           trades: updatedTrades,
           loading: false
@@ -127,14 +103,16 @@ export const usePortfolioStore = create<PortfolioState>((set) => ({
     set({ loading: true, error: null });
     try {
       await resetPortfolio();
-      set(() => {
-        persistPortfolio(null, []);
-        return {
-          initialSeed: null,
-          trades: [],
-          loading: false,
-          hasLoaded: true
-        };
+      const snapshot = await fetchPortfolio();
+      set({
+        initialSeed: snapshot.initialSeed,
+        trades: snapshot.trades,
+        baseCurrency: snapshot.baseCurrency,
+        displayCurrency: snapshot.displayCurrency,
+        exchangeRate: snapshot.exchangeRate ?? null,
+        loading: false,
+        hasLoaded: true,
+        error: null
       });
     } catch (error) {
       console.error('Failed to reset portfolio', error);
@@ -144,13 +122,15 @@ export const usePortfolioStore = create<PortfolioState>((set) => ({
   },
 
   logout: () => {
-    set((state) => {
-      persistPortfolio(state.initialSeed, state.trades);
-      return {
-        loading: false,
-        error: null,
-        hasLoaded: false
-      };
+    set({
+      initialSeed: null,
+      trades: [],
+      baseCurrency: BASE_CURRENCY_DEFAULT,
+      displayCurrency: usePreferencesStore.getState().currency,
+      exchangeRate: null,
+      loading: false,
+      error: null,
+      hasLoaded: false
     });
   },
 

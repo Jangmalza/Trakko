@@ -1,9 +1,10 @@
-﻿import React, { useEffect } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TradeEntryForm from '../components/TradeEntryForm';
 import SeedOverviewChart from '../components/SeedOverviewChart';
 import TradeEntriesList from '../components/TradeEntriesList';
 import HeaderNavigation from '../components/HeaderNavigation';
+import ChatAssistantPanel from '../components/ChatAssistantPanel';
 import { usePortfolioStore } from '../store/portfolioStore';
 
 const DASHBOARD_TITLE = '일일 자본 트래커';
@@ -13,6 +14,7 @@ const LOADING_MESSAGE = '데이터를 불러오는 중입니다...';
 
 const PortfolioDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const {
     initialSeed,
     trades,
@@ -51,7 +53,6 @@ const PortfolioDashboard: React.FC = () => {
       <HeaderNavigation />
       <div className="mx-auto max-w-6xl px-6 py-12">
         <header className="space-y-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Investment journal</p>
           <h1 className="text-3xl font-semibold">{DASHBOARD_TITLE}</h1>
           <p className="max-w-2xl text-sm text-slate-500">{DASHBOARD_SUBTITLE}</p>
         </header>
@@ -75,6 +76,33 @@ const PortfolioDashboard: React.FC = () => {
           </main>
         )}
       </div>
+      <button
+        type="button"
+        disabled={showPlaceholder}
+        onClick={() => setAssistantOpen(true)}
+        className={`fixed bottom-6 right-6 z-30 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:cursor-not-allowed disabled:bg-slate-300 ${assistantOpen ? 'hidden' : ''}`}
+      >
+        <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+        AI 어시스턴트
+      </button>
+
+      {assistantOpen && (
+        <div
+          className="fixed inset-0 z-40 flex justify-end bg-slate-900/30 backdrop-blur-sm"
+          onClick={() => setAssistantOpen(false)}
+        >
+          <div
+            className="flex h-full w-full max-w-sm flex-col p-4 sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ChatAssistantPanel
+              trades={trades}
+              initialSeed={initialSeed}
+              onClose={() => setAssistantOpen(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

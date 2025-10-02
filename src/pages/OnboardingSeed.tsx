@@ -1,10 +1,10 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { APP_CURRENCY } from '../config/appConfig';
 import { formatCurrency } from '../utils/formatCurrency';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useAuthStore } from '../store/authStore';
 import TrakkoAuthHero from '../components/TrakkoAuthHero';
+import { usePreferencesStore } from '../store/preferencesStore';
 
 const OnboardingSeed: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +24,7 @@ const OnboardingSeed: React.FC = () => {
     bootstrap,
     getLoginUrl
   } = useAuthStore();
+  const currency = usePreferencesStore((state) => state.currency);
   const [seedInput, setSeedInput] = useState('');
   const [touched, setTouched] = useState(false);
 
@@ -117,7 +118,7 @@ const OnboardingSeed: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
-            초기 시드 ({APP_CURRENCY})
+            초기 시드 ({currency})
             <input
               type="text"
               inputMode="decimal"

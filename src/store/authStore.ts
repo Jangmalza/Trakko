@@ -2,6 +2,7 @@
 import type { AuthUser } from '../api/authApi';
 import { buildGoogleLoginUrl, fetchCurrentUser, logoutRequest } from '../api/authApi';
 import { usePortfolioStore } from './portfolioStore';
+import { usePreferencesStore } from './preferencesStore';
 
 interface AuthState {
   user: AuthUser | null;
@@ -30,10 +31,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const user = await fetchCurrentUser();
       set({ user, checking: false, hasChecked: true });
+      if (user) {
+        void usePreferencesStore.getState().loadPreferences();
+      } else {
+        usePreferencesStore.getState().reset();
+      }
       return user;
     } catch (error) {
       console.error('Failed to fetch current user', error);
       set({ user: null, checking: false, hasChecked: true, error: error instanceof Error ? error.message : 'Unknown error' });
+      usePreferencesStore.getState().reset();
       return null;
     }
   },
@@ -45,6 +52,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // continue even if request fails to avoid blocking UI
     }
     usePortfolioStore.getState().logout();
+    usePreferencesStore.getState().reset();
     set({ user: null, error: null, hasChecked: true, checking: false });
   }
 }));

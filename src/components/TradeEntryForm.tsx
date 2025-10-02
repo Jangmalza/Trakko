@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { APP_CURRENCY } from '../config/appConfig';
 import type { NewTradeEntry } from '../data/portfolioTypes';
+import { usePreferencesStore } from '../store/preferencesStore';
 
 interface TradeEntryFormProps {
   onSubmit: (entry: NewTradeEntry) => Promise<void>;
@@ -8,6 +8,7 @@ interface TradeEntryFormProps {
 }
 
 const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) => {
+  const currency = usePreferencesStore((state) => state.currency);
   const [ticker, setTicker] = useState('');
   const [profitLoss, setProfitLoss] = useState('');
   const [tradeDate, setTradeDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -45,7 +46,7 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
   return (
     <form onSubmit={handleSubmit} className="space-y-4 rounded border border-slate-200 bg-white p-6 text-sm text-slate-800">
       <div>
-        <h2 className="text-base font-semibold text-slate-900">거래 글록</h2>
+        <h2 className="text-base font-semibold text-slate-900">거래 기록</h2>
         <p className="mt-1 text-xs text-slate-500">손익과 근거를 간단히 남겨 두세요.</p>
       </div>
 
@@ -61,7 +62,7 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
           />
         </label>
         <label className="space-y-2">
-          <span className="block text-xs font-medium text-slate-600">손익 ({APP_CURRENCY})</span>
+          <span className="block text-xs font-medium text-slate-600">손익 ({currency})</span>
           <input
             type="text"
             value={profitLoss}

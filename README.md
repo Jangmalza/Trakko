@@ -1,55 +1,57 @@
-ï»¿# Trakko
+# Trakko
 
-ì£¼ì‹ íˆ¬ìž ì¼ì§€ë¥¼ ê¸°ë¡í•˜ê³  ë¶„ì„í•  ìˆ˜ ìžˆëŠ” ì›¹ ì• í”Œë¦¬ì¼€ì´ì…˜ìž…ë‹ˆë‹¤. ì´ˆê¸° ìžë³¸ì„ ë“±ë¡í•˜ê³  ê° ê±°ëž˜ì˜ ì†ìµê³¼ ê·¼ê±°ë¥¼ ë‚¨ê¸°ë©´ì„œ ìžë³¸ ì¶”ì´ë¥¼ ì‹œê°ì ìœ¼ë¡œ í™•ì¸í•  ìˆ˜ ìžˆìŠµë‹ˆë‹¤.
+ÁÖ½Ä ÅõÀÚ ÀÏÁö¸¦ ±â·ÏÇÏ°í ºÐ¼®ÇÒ ¼ö ÀÖ´Â À¥ ¾ÖÇÃ¸®ÄÉÀÌ¼ÇÀÔ´Ï´Ù. ÃÊ±â ÀÚº»À» µî·ÏÇÏ°í °¢ °Å·¡ÀÇ ¼ÕÀÍ°ú ±Ù°Å¸¦ ³²±â¸é¼­ ÀÚº» ÃßÀÌ¸¦ ½Ã°¢ÀûÀ¸·Î È®ÀÎÇÒ ¼ö ÀÖ½À´Ï´Ù.
 
-## ì£¼ìš” ê¸°ëŠ¥
+## ÁÖ¿ä ±â´É
 
-- **ì´ˆê¸° ì‹œë“œ ì˜¨ë³´ë”©**: ì²« ë°©ë¬¸ ì‹œ íˆ¬ìžì— ì‚¬ìš©í•  ì´ˆê¸° ìžë³¸ì„ ìž…ë ¥í•©ë‹ˆë‹¤.
-- **ê±°ëž˜ ê¸°ë¡ ê´€ë¦¬**: í‹°ì»¤, ì†ìµ ê¸ˆì•¡, ê±°ëž˜ì¼, ë§¤ë§¤ ê·¼ê±°ë¥¼ ìƒì„¸í•˜ê²Œ ë‚¨ê¸¸ ìˆ˜ ìžˆìŠµë‹ˆë‹¤.
-- **ìžë³¸ ì¶”ì´ ì°¨íŠ¸**: ëˆ„ì  ì†ìµì´ ìžë³¸ì— ë¯¸ì¹˜ëŠ” ì˜í–¥ì„ ê·¸ëž˜í”„ë¡œ í•œëˆˆì— íŒŒì•…í•©ë‹ˆë‹¤.
-- **ë°ì´í„° ì´ˆê¸°í™”**: ì„¤ì • íŽ˜ì´ì§€ì—ì„œ ì‹œë“œì™€ ê±°ëž˜ ë°ì´í„°ë¥¼ ì´ˆê¸° ìƒíƒœë¡œ ë˜ëŒë¦´ ìˆ˜ ìžˆìŠµë‹ˆë‹¤.
-- **REST API**: Express ì„œë²„ê°€ í¬íŠ¸í´ë¦¬ì˜¤ ë°ì´í„°ë¥¼ JSON íŒŒì¼ë¡œ ì €ìž¥Â·ì œê³µí•©ë‹ˆë‹¤.
+- **ÃÊ±â ½Ãµå ¿Âº¸µù**: Ã¹ ¹æ¹® ½Ã ÅõÀÚ¿¡ »ç¿ëÇÒ ÃÊ±â ÀÚº»À» ÀÔ·ÂÇÕ´Ï´Ù.
+- **°Å·¡ ±â·Ï °ü¸®**: Æ¼Ä¿, ¼ÕÀÍ ±Ý¾×, °Å·¡ÀÏ, ¸Å¸Å ±Ù°Å¸¦ »ó¼¼ÇÏ°Ô ³²±æ ¼ö ÀÖ½À´Ï´Ù.
+- **ÀÚº» ÃßÀÌ Â÷Æ®**: ´©Àû ¼ÕÀÍÀÌ ÀÚº»¿¡ ¹ÌÄ¡´Â ¿µÇâÀ» ±×·¡ÇÁ·Î ÇÑ´«¿¡ ÆÄ¾ÇÇÕ´Ï´Ù.
+- **µ¥ÀÌÅÍ ÃÊ±âÈ­**: ¼³Á¤ ÆäÀÌÁö¿¡¼­ ½Ãµå¿Í °Å·¡ µ¥ÀÌÅÍ¸¦ ÃÊ±â »óÅÂ·Î µÇµ¹¸± ¼ö ÀÖ½À´Ï´Ù.
+- **REST API**: Express ¼­¹ö°¡ Æ÷Æ®Æú¸®¿À µ¥ÀÌÅÍ¸¦ JSON ÆÄÀÏ·Î ÀúÀå¡¤Á¦°øÇÕ´Ï´Ù.
 
-## ë¹ ë¥¸ ì‹œìž‘
+## ºü¸¥ ½ÃÀÛ
 
 ```bash
 npm install
-npm run server # http://localhost:4000 ì—ì„œ API ì„œë²„ ì‹¤í–‰
-npm run dev    # http://localhost:5173 ì—ì„œ í”„ëŸ°íŠ¸ ê°œë°œ ì„œë²„ ì‹¤í–‰
+npm run server # http://localhost:4000 ¿¡¼­ API ¼­¹ö ½ÇÇà
+npm run dev    # http://localhost:5173 ¿¡¼­ ÇÁ·±Æ® °³¹ß ¼­¹ö ½ÇÇà
 ```
 
-> ë‹¤ë¥¸ ì£¼ì†Œì—ì„œ APIë¥¼ í˜¸ì¶œí•˜ë ¤ë©´ `VITE_API_BASE_URL` í™˜ê²½ ë³€ìˆ˜ë¥¼ ì„¤ì •í•˜ì„¸ìš”.
+> ´Ù¸¥ ÁÖ¼Ò¿¡¼­ API¸¦ È£ÃâÇÏ·Á¸é `VITE_API_BASE_URL` È¯°æ º¯¼ö¸¦ ¼³Á¤ÇÏ¼¼¿ä.
 
-## API ê°œìš”
+## API °³¿ä
 
-| Method | Endpoint                | ì„¤ëª…                       |
+| Method | Endpoint                | ¼³¸í                       |
 | ------ | ----------------------- | -------------------------- |
-| GET    | `/api/portfolio`        | ì‹œë“œ ë° ê±°ëž˜ ë°ì´í„° ì¡°íšŒ   |
-| POST   | `/api/portfolio/seed`   | ì´ˆê¸° ì‹œë“œ ì„¤ì •/ìˆ˜ì •        |
-| POST   | `/api/portfolio/trades` | ê±°ëž˜ ê¸°ë¡ ì¶”ê°€             |
-| POST   | `/api/portfolio/reset`  | ì‹œë“œì™€ ê±°ëž˜ ë°ì´í„° ì´ˆê¸°í™”  |
+| GET    | `/api/portfolio`        | ½Ãµå ¹× °Å·¡ µ¥ÀÌÅÍ Á¶È¸   |
+| POST   | `/api/portfolio/seed`   | ÃÊ±â ½Ãµå ¼³Á¤/¼öÁ¤        |
+| POST   | `/api/portfolio/trades` | °Å·¡ ±â·Ï Ãß°¡             |
+| POST   | `/api/portfolio/reset`  | ½Ãµå¿Í °Å·¡ µ¥ÀÌÅÍ ÃÊ±âÈ­  |
 
-## ê¸°ìˆ  ìŠ¤íƒ
+## ±â¼ú ½ºÅÃ
 
-- React 18 Â· TypeScript Â· Vite
+- React 18 ¡¤ TypeScript ¡¤ Vite
 - Tailwind CSS
-- Zustand (ìƒíƒœ ê´€ë¦¬)
-- Recharts (ë°ì´í„° ì‹œê°í™”)
-- Express (ë°±ì—”ë“œ API)
+- Zustand (»óÅÂ °ü¸®)
+- Recharts (µ¥ÀÌÅÍ ½Ã°¢È­)
+- Express (¹é¿£µå API)
 
-## í™˜ê²½ ë³€ìˆ˜
+## È¯°æ º¯¼ö
 
-| ë³€ìˆ˜ | ì„¤ëª… |
+| º¯¼ö | ¼³¸í |
 | --- | --- |
-| `VITE_API_BASE_URL` | í”„ëŸ°íŠ¸ì—ì„œ í˜¸ì¶œí•  API ì£¼ì†Œ (ê¸°ë³¸ `http://localhost:4000/api`) |
-| `VITE_APP_LOCALE` | í†µí™” í¬ë§·ì— ì‚¬ìš©í•  ë¡œì¼€ì¼ (ê¸°ë³¸ `en-US`) |
-| `VITE_APP_CURRENCY` | í‘œì‹œ í†µí™” ì½”ë“œ (ê¸°ë³¸ `USD`) |
-| `GOOGLE_CLIENT_ID` | Google OAuth í´ë¼ì´ì–¸íŠ¸ ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth í´ë¼ì´ì–¸íŠ¸ ë¹„ë°€í‚¤ |
-| `GOOGLE_CALLBACK_URL` | Google OAuth ì½œë°± URL (ë¯¸ì§€ì • ì‹œ `http://localhost:4000/api/auth/google/callback`) |
-| `CLIENT_BASE_URL` | í”„ëŸ°íŠ¸ì—”ë“œ ë² ì´ìŠ¤ URL (ê¸°ë³¸ `http://localhost:5173`) |
-| `SESSION_SECRET` | Express ì„¸ì…˜ ì„œëª…ì— ì‚¬ìš©í•  ë¹„ë°€í‚¤ |
+| `VITE_API_BASE_URL` | ÇÁ·±Æ®¿¡¼­ È£ÃâÇÒ API ÁÖ¼Ò (±âº» `http://localhost:4000/api`) |
+| `VITE_APP_LOCALE` | ÅëÈ­ Æ÷¸Ë¿¡ »ç¿ëÇÒ ·ÎÄÉÀÏ (±âº» `en-US`) |
+| `VITE_APP_CURRENCY` | Ç¥½Ã ÅëÈ­ ÄÚµå (±âº» `USD`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth Å¬¶óÀÌ¾ðÆ® ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth Å¬¶óÀÌ¾ðÆ® ºñ¹ÐÅ° |
+| `GOOGLE_CALLBACK_URL` | Google OAuth ÄÝ¹é URL (¹ÌÁöÁ¤ ½Ã `http://localhost:4000/api/auth/google/callback`) |
+| `CLIENT_BASE_URL` | ÇÁ·±Æ®¿£µå º£ÀÌ½º URL (±âº» `http://localhost:5173`) |
+| `SESSION_SECRET` | Express ¼¼¼Ç ¼­¸í¿¡ »ç¿ëÇÒ ºñ¹ÐÅ° |
+| `OPENAI_API_KEY` | AI ¾î½Ã½ºÅÏÆ® ÀÀ´ä »ý¼ºÀ» À§ÇÑ OpenAI API Å° |
+| `OPENAI_MODEL` | »ç¿ëÇÒ OpenAI ¸ðµ¨ ID (±âº» `gpt-4o-mini`) |
 
-## ë¼ì´ì„ ìŠ¤
+## ¶óÀÌ¼±½º
 
 MIT
