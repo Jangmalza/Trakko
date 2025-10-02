@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id
+  displayName  String?
+  email        String?
+  initialSeed  Decimal?    @db.Decimal(18, 2)
+  baseCurrency String      @default("KRW")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  preferences  Preference?
+  trades       Trade[]
+}
+
+model Preference {
+  userId   String @id
+  currency String
+  locale   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Trade {
+  id         String   @id @default(cuid())
+  userId     String
+  ticker     String
+  profitLoss Decimal  @db.Decimal(18, 2)
+  rationale  String
+  tradeDate  DateTime
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

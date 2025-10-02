@@ -4,11 +4,12 @@ import cors from 'cors';
 import session from 'express-session';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
+import { Prisma, PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
+
+const prisma = new PrismaClient();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,14 +100,159 @@ async function convertAmount(amount, fromCurrency, toCurrency) {
     return amount * rates.KRW_PER_USD;
   }
 
-  // Unsupported conversion path, return original amount
   return amount;
 }
 
 async function getExchangeRate(fromCurrency, toCurrency) {
   if (fromCurrency === toCurrency) return 1;
-  const converted = await convertAmount(1, fromCurrency, toCurrency);
-  return converted;
+  return convertAmount(1, fromCurrency, toCurrency);
+}
+
+function normalizeCurrency(value) {
+  if (typeof value !== 'string') return defaultPreferences.currency;
+  const upper = value.toUpperCase();
+  return SUPPORTED_CURRENCIES.has(upper) ? upper : defaultPreferences.currency;
+}
+
+async function ensureUserRecord(sessionUser) {
+  if (!sessionUser) {
+    throw new Error('Authenticated user required');
+  }
+
+  await prisma.user.upsert({
+    where: { id: sessionUser.id },
+    update: {
+      displayName: sessionUser.displayName ?? null,
+      email: sessionUser.email ?? null
+    },
+    create: {
+      id: sessionUser.id,
+      displayName: sessionUser.displayName ?? null,
+      email: sessionUser.email ?? null,
+      baseCurrency: BASE_CURRENCY,
+      preferences: {
+        create: defaultPreferences
+      }
+    }
+  });
+}
+
+async function getUserWithRelations(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      preferences: true,
+      trades: {
+        orderBy: { tradeDate: 'asc' }
+      }
+    }
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  if (!user.preferences) {
+    await prisma.preference.create({
+      data: {
+        userId,
+        currency: defaultPreferences.currency,
+        locale: defaultPreferences.locale
+      }
+    });
+    return getUserWithRelations(userId);
+  }
+
+  return user;
+}
+
+function toNumber(decimal) {
+  if (decimal === null || decimal === undefined) return null;
+  return Number(decimal);
+}
+
+function tradeDateToString(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+async function mapTradeForResponse(trade, baseCurrency, displayCurrency) {
+  const profitLossNumber = Number(trade.profitLoss);
+  const converted = await convertAmount(profitLossNumber, baseCurrency, displayCurrency);
+  return {
+    id: trade.id,
+    ticker: trade.ticker,
+    profitLoss: converted,
+    rationale: trade.rationale,
+    tradeDate: tradeDateToString(trade.tradeDate),
+    createdAt: trade.createdAt.toISOString(),
+    currency: displayCurrency
+  };
+}
+
+async function getPortfolioResponse(userId) {
+  const user = await getUserWithRelations(userId);
+  const baseCurrency = normalizeCurrency(user.baseCurrency ?? BASE_CURRENCY);
+  const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
+  const exchangeRate = await getExchangeRate(baseCurrency, displayCurrency);
+
+  const initialSeedBase = toNumber(user.initialSeed);
+  const initialSeed = initialSeedBase !== null ? await convertAmount(initialSeedBase, baseCurrency, displayCurrency) : null;
+
+  const trades = await Promise.all(
+    user.trades.map((trade) => mapTradeForResponse(trade, baseCurrency, displayCurrency))
+  );
+
+  return {
+    initialSeed,
+    trades,
+    baseCurrency,
+    displayCurrency,
+    exchangeRate
+  };
+}
+
+async function buildPortfolioSummary(userId) {
+  const portfolio = await getPortfolioResponse(userId);
+  const totalPnL = portfolio.trades.reduce((acc, trade) => acc + trade.profitLoss, 0);
+  const currentCapital = portfolio.initialSeed !== null ? portfolio.initialSeed + totalPnL : null;
+  const wins = portfolio.trades.filter((trade) => trade.profitLoss >= 0).length;
+  const losses = portfolio.trades.length - wins;
+
+  const locale = currencyLocales[portfolio.displayCurrency] ?? 'en-US';
+  const formatter = new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: portfolio.displayCurrency,
+    maximumFractionDigits: portfolio.displayCurrency === 'KRW' ? 0 : 2
+  });
+
+  const formatNumber = (value) => {
+    if (value === null || !Number.isFinite(value)) return 'N/A';
+    return formatter.format(value);
+  };
+
+  const recentTrades = portfolio.trades
+    .slice(-5)
+    .reverse()
+    .map((trade) => `${trade.tradeDate} ??${trade.ticker} ??${trade.profitLoss >= 0 ? 'profit' : 'loss'} ${formatNumber(Math.abs(trade.profitLoss))}`);
+
+  return {
+    initialSeed: portfolio.initialSeed,
+    totalPnL,
+    currentCapital,
+    wins,
+    losses,
+    totalTrades: portfolio.trades.length,
+    recentTrades,
+    currency: portfolio.displayCurrency,
+    formatNumber
+  };
+}
+
+function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+  next();
 }
 
 app.use(cors({
@@ -158,217 +304,24 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
   console.warn('Google OAuth credentials are not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable login.');
 }
 
-const dataDir = path.join(__dirname, 'data');
-
-function normalizeCurrency(value) {
-  if (typeof value !== 'string') return defaultPreferences.currency;
-  const upper = value.toUpperCase();
-  return SUPPORTED_CURRENCIES.has(upper) ? upper : defaultPreferences.currency;
-}
-
-function normalizePreferences(preferences) {
-  const normalizedCurrency = normalizeCurrency(preferences?.currency);
-  const localeCandidate = typeof preferences?.locale === 'string' && preferences.locale.length > 0
-    ? preferences.locale
-    : currencyLocales[normalizedCurrency];
-
-  return {
-    currency: normalizedCurrency,
-    locale: localeCandidate
-  };
-}
-
-function createDefaultPortfolio(overrides = {}) {
-  const trades = Array.isArray(overrides.trades) ? [...overrides.trades] : [];
-  const initialSeedValue = Number.isFinite(overrides.initialSeed) ? overrides.initialSeed : null;
-
-  return {
-    initialSeed: initialSeedValue,
-    trades,
-    baseCurrency: BASE_CURRENCY,
-    preferences: normalizePreferences(overrides.preferences ?? defaultPreferences)
-  };
-}
-
-function normalizePortfolio(portfolio) {
-  if (!portfolio || typeof portfolio !== 'object') {
-    return createDefaultPortfolio();
-  }
-
-  const initialSeed = Number.isFinite(portfolio.initialSeed) ? portfolio.initialSeed : null;
-  const trades = Array.isArray(portfolio.trades)
-    ? portfolio.trades.map((trade) => {
-      const profitLossValue = Number(trade?.profitLoss);
-      return {
-        ...trade,
-        profitLoss: Number.isFinite(profitLossValue) ? profitLossValue : 0
-      };
-    })
-    : [];
-
-  return {
-    initialSeed,
-    trades,
-    baseCurrency: normalizeCurrency(portfolio.baseCurrency ?? BASE_CURRENCY),
-    preferences: normalizePreferences(portfolio.preferences)
-  };
-}
-
-async function mapPortfolioForResponse(portfolio) {
-  const baseCurrency = normalizeCurrency(portfolio.baseCurrency ?? BASE_CURRENCY);
-  const displayCurrency = normalizeCurrency(portfolio.preferences?.currency ?? BASE_CURRENCY);
-
-  const initialSeed = portfolio.initialSeed === null
-    ? null
-    : await convertAmount(portfolio.initialSeed, baseCurrency, displayCurrency);
-
-  const trades = await Promise.all(
-    portfolio.trades.map(async (trade) => ({
-      ...trade,
-      profitLoss: await convertAmount(trade.profitLoss, baseCurrency, displayCurrency),
-      currency: displayCurrency
-    }))
-  );
-
-  const exchangeRate = await getExchangeRate(baseCurrency, displayCurrency);
-
-  return {
-    initialSeed,
-    trades,
-    baseCurrency,
-    displayCurrency,
-    exchangeRate
-  };
-}
-
-const portfolioPathForUser = (userId) => path.join(dataDir, `portfolio-${userId}.json`);
-
-async function ensurePortfolioFileForUser(userId) {
-  await mkdir(dataDir, { recursive: true });
-  const filePath = portfolioPathForUser(userId);
-  try {
-    await access(filePath);
-  } catch {
-    await writeFile(filePath, JSON.stringify(createDefaultPortfolio(), null, 2), 'utf8');
-  }
-  return filePath;
-}
-
-async function readPortfolioForUser(userId) {
-  const filePath = await ensurePortfolioFileForUser(userId);
-  const raw = await readFile(filePath, 'utf8');
-  return normalizePortfolio(JSON.parse(raw));
-}
-
-async function writePortfolioForUser(userId, portfolio) {
-  const filePath = portfolioPathForUser(userId);
-  await mkdir(dataDir, { recursive: true });
-  const normalized = normalizePortfolio(portfolio);
-  await writeFile(filePath, JSON.stringify(normalized, null, 2), 'utf8');
-}
-
-async function buildPortfolioSummary(portfolio) {
-  const mapped = await mapPortfolioForResponse(portfolio);
-  const { initialSeed, trades, displayCurrency } = mapped;
-  const totalPnL = trades.reduce((acc, trade) => acc + (Number(trade.profitLoss) || 0), 0);
-  const currentCapital = initialSeed !== null ? initialSeed + totalPnL : null;
-  const wins = trades.filter((trade) => Number(trade.profitLoss) >= 0).length;
-  const losses = trades.length - wins;
-
-  const formatNumber = (value) => {
-    if (!Number.isFinite(value)) return 'N/A';
-    const locale = currencyLocales[displayCurrency] ?? 'en-US';
-    const formatter = new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: displayCurrency,
-      maximumFractionDigits: displayCurrency === 'KRW' ? 0 : 2
-    });
-    return formatter.format(value);
-  };
-
-  const recentTrades = trades
-    .slice(-5)
-    .reverse()
-    .map((trade) => {
-      const direction = Number(trade.profitLoss) >= 0 ? 'profit' : 'loss';
-      return `${trade.tradeDate ?? 'unknown date'} • ${trade.ticker ?? 'N/A'} • ${direction} ${formatNumber(trade.profitLoss)}`;
-    });
-
-  return {
-    initialSeed,
-    totalPnL,
-    currentCapital,
-    wins,
-    losses,
-    totalTrades: trades.length,
-    recentTrades,
-    currency: displayCurrency
-  };
-}
-
-function requireAuth(req, res, next) {
-  if (!req.user) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  next();
-}
-
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
+  await ensureUserRecord(req.user);
   res.json(req.user);
-});
-
-if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-  app.get('/api/auth/google', (req, res, next) => {
-    const redirect = typeof req.query.redirect === 'string' ? req.query.redirect : undefined;
-    if (redirect) {
-      req.session.redirectTo = redirect;
-    }
-    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
-  });
-
-  app.get(
-    '/api/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: `${CLIENT_BASE_URL}/auth/callback?error=google` }),
-    (req, res) => {
-      const redirectTo = req.session.redirectTo ?? `${CLIENT_BASE_URL}/auth/callback`;
-      delete req.session.redirectTo;
-      res.redirect(redirectTo);
-    }
-  );
-} else {
-  app.get('/api/auth/google', (_req, res) => {
-    res.status(503).json({ message: 'Google authentication is not configured.' });
-  });
-
-  app.get('/api/auth/google/callback', (_req, res) => {
-    res.redirect(`${CLIENT_BASE_URL}/auth/callback?error=unavailable`);
-  });
-}
-
-app.post('/api/auth/logout', (req, res, next) => {
-  req.logout((logoutError) => {
-    if (logoutError) {
-      return next(logoutError);
-    }
-    req.session.destroy(() => {
-      res.clearCookie('connect.sid');
-      res.status(204).send();
-    });
-  });
 });
 
 app.get('/api/portfolio', requireAuth, async (req, res) => {
   try {
-    const portfolio = await readPortfolioForUser(req.user.id);
-    const response = await mapPortfolioForResponse(portfolio);
-    res.json(response);
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const snapshot = await getPortfolioResponse(sessionUser.id);
+    res.json(snapshot);
   } catch (error) {
     console.error('Failed to read portfolio', error);
     res.status(500).json({ message: 'Failed to read portfolio data' });
@@ -384,19 +337,23 @@ app.post('/api/portfolio/seed', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'initialSeed must be a positive number' });
     }
 
-    const portfolio = await readPortfolioForUser(req.user.id);
-    const baseCurrency = portfolio.baseCurrency ?? BASE_CURRENCY;
-    const sourceCurrency = normalizeCurrency(currency ?? portfolio.preferences?.currency);
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const user = await getUserWithRelations(sessionUser.id);
+    const baseCurrency = normalizeCurrency(user.baseCurrency ?? BASE_CURRENCY);
+    const sourceCurrency = normalizeCurrency(currency ?? user.preferences.currency ?? baseCurrency);
     const seedValueInBase = await convertAmount(seedValue, sourceCurrency, baseCurrency);
 
-    const next = {
-      ...portfolio,
-      initialSeed: seedValueInBase
-    };
+    await prisma.user.update({
+      where: { id: sessionUser.id },
+      data: {
+        initialSeed: new Prisma.Decimal(seedValueInBase.toFixed(2)),
+        baseCurrency
+      }
+    });
 
-    await writePortfolioForUser(req.user.id, next);
-    const response = await mapPortfolioForResponse(next);
-    res.json(response);
+    const snapshot = await getPortfolioResponse(sessionUser.id);
+    res.json(snapshot);
   } catch (error) {
     console.error('Failed to update seed', error);
     res.status(500).json({ message: 'Failed to update seed' });
@@ -426,33 +383,31 @@ app.post('/api/portfolio/trades', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'tradeDate is required' });
     }
 
-    const portfolio = await readPortfolioForUser(req.user.id);
-    if (portfolio.initialSeed === null) {
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const user = await getUserWithRelations(sessionUser.id);
+
+    if (user.initialSeed === null) {
       return res.status(400).json({ message: 'Set an initial seed before logging trades' });
     }
 
-    const baseCurrency = portfolio.baseCurrency ?? BASE_CURRENCY;
-    const sourceCurrency = normalizeCurrency(currency ?? portfolio.preferences?.currency);
+    const baseCurrency = normalizeCurrency(user.baseCurrency ?? BASE_CURRENCY);
+    const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
+    const sourceCurrency = normalizeCurrency(currency ?? displayCurrency);
     const profitLossInBase = await convertAmount(profitLossValue, sourceCurrency, baseCurrency);
 
-    const newTrade = {
-      id: `trade-${randomUUID()}`,
-      ticker: ticker.trim().toUpperCase(),
-      profitLoss: profitLossInBase,
-      rationale: String(rationale ?? ''),
-      tradeDate,
-      createdAt: new Date().toISOString()
-    };
+    const createdTrade = await prisma.trade.create({
+      data: {
+        userId: sessionUser.id,
+        ticker: ticker.trim().toUpperCase(),
+        profitLoss: new Prisma.Decimal(profitLossInBase.toFixed(2)),
+        rationale: String(rationale ?? ''),
+        tradeDate: new Date(`${tradeDate}T00:00:00.000Z`)
+      }
+    });
 
-    const next = {
-      ...portfolio,
-      trades: [...portfolio.trades, newTrade]
-    };
-
-    await writePortfolioForUser(req.user.id, next);
-
-    const profitLossDisplay = await convertAmount(newTrade.profitLoss, baseCurrency, portfolio.preferences.currency);
-    res.status(201).json({ ...newTrade, profitLoss: profitLossDisplay, currency: portfolio.preferences.currency });
+    const response = await mapTradeForResponse(createdTrade, baseCurrency, displayCurrency);
+    res.status(201).json(response);
   } catch (error) {
     console.error('Failed to create trade', error);
     res.status(500).json({ message: 'Failed to create trade' });
@@ -471,93 +426,75 @@ app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
     } = req.body ?? {};
 
     if (typeof ticker !== 'string' || ticker.trim() === '') {
-      return res.status(400).json({ message: '티커를 입력해주세요.' });
+      return res.status(400).json({ message: '?곗빱瑜??낅젰?댁＜?몄슂.' });
     }
 
     const profitLossValue = Number(profitLoss);
     if (!Number.isFinite(profitLossValue)) {
-      return res.status(400).json({ message: '손익 금액은 숫자여야 합니다.' });
+      return res.status(400).json({ message: '?먯씡 湲덉븸? ?レ옄?ъ빞 ?⑸땲??' });
     }
 
     if (typeof tradeDate !== 'string' || tradeDate.trim() === '') {
-      return res.status(400).json({ message: '거래 날짜를 입력해주세요.' });
+      return res.status(400).json({ message: '嫄곕옒 ?좎쭨瑜??낅젰?댁＜?몄슂.' });
     }
 
-    const portfolio = await readPortfolioForUser(req.user.id);
-    const existingTrade = portfolio.trades.find((trade) => trade.id === tradeId);
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const user = await getUserWithRelations(sessionUser.id);
 
-    if (!existingTrade) {
-      return res.status(404).json({ message: '거래를 찾을 수 없습니다.' });
+    const existingTrade = await prisma.trade.findUnique({ where: { id: tradeId } });
+    if (!existingTrade || existingTrade.userId !== sessionUser.id) {
+      return res.status(404).json({ message: '嫄곕옒瑜?李얠쓣 ???놁뒿?덈떎.' });
     }
 
-    const baseCurrency = portfolio.baseCurrency ?? BASE_CURRENCY;
-    const sourceCurrency = normalizeCurrency(currency ?? portfolio.preferences?.currency);
+    const baseCurrency = normalizeCurrency(user.baseCurrency ?? BASE_CURRENCY);
+    const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
+    const sourceCurrency = normalizeCurrency(currency ?? displayCurrency);
     const profitLossInBase = await convertAmount(profitLossValue, sourceCurrency, baseCurrency);
 
-    const updatedTrade = {
-      ...existingTrade,
-      ticker: ticker.trim().toUpperCase(),
-      profitLoss: profitLossInBase,
-      rationale: String(rationale ?? ''),
-      tradeDate
-    };
-
-    const nextTrades = portfolio.trades
-      .map((trade) => (trade.id === tradeId ? updatedTrade : trade))
-      .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
-
-    const next = {
-      ...portfolio,
-      trades: nextTrades
-    };
-
-    await writePortfolioForUser(req.user.id, next);
-
-    const profitLossDisplay = await convertAmount(
-      updatedTrade.profitLoss,
-      baseCurrency,
-      portfolio.preferences.currency
-    );
-
-    res.json({
-      ...updatedTrade,
-      profitLoss: profitLossDisplay,
-      currency: portfolio.preferences.currency
+    const updatedTrade = await prisma.trade.update({
+      where: { id: tradeId },
+      data: {
+        ticker: ticker.trim().toUpperCase(),
+        profitLoss: new Prisma.Decimal(profitLossInBase.toFixed(2)),
+        rationale: String(rationale ?? ''),
+        tradeDate: new Date(`${tradeDate}T00:00:00.000Z`)
+      }
     });
+
+    const response = await mapTradeForResponse(updatedTrade, baseCurrency, displayCurrency);
+    res.json(response);
   } catch (error) {
     console.error('Failed to update trade', error);
-    res.status(500).json({ message: '거래를 수정하지 못했습니다.' });
+    res.status(500).json({ message: '嫄곕옒瑜??섏젙?섏? 紐삵뻽?듬땲??' });
   }
 });
 
 app.delete('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
   try {
     const { tradeId } = req.params;
-    const portfolio = await readPortfolioForUser(req.user.id);
-    const exists = portfolio.trades.some((trade) => trade.id === tradeId);
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
 
-    if (!exists) {
-      return res.status(404).json({ message: '거래를 찾을 수 없습니다.' });
+    const existingTrade = await prisma.trade.findUnique({ where: { id: tradeId } });
+    if (!existingTrade || existingTrade.userId !== sessionUser.id) {
+      return res.status(404).json({ message: '嫄곕옒瑜?李얠쓣 ???놁뒿?덈떎.' });
     }
 
-    const nextTrades = portfolio.trades.filter((trade) => trade.id !== tradeId);
-    const next = {
-      ...portfolio,
-      trades: nextTrades
-    };
-
-    await writePortfolioForUser(req.user.id, next);
+    await prisma.trade.delete({ where: { id: tradeId } });
     res.status(204).send();
   } catch (error) {
     console.error('Failed to delete trade', error);
-    res.status(500).json({ message: '거래를 삭제하지 못했습니다.' });
+    res.status(500).json({ message: '嫄곕옒瑜???젣?섏? 紐삵뻽?듬땲??' });
   }
 });
 
 app.get('/api/preferences', requireAuth, async (req, res) => {
   try {
-    const portfolio = await readPortfolioForUser(req.user.id);
-    res.json(portfolio.preferences);
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const user = await getUserWithRelations(sessionUser.id);
+    res.json(user.preferences);
   } catch (error) {
     console.error('Failed to read preferences', error);
     res.status(500).json({ message: 'Failed to read preferences' });
@@ -571,24 +508,25 @@ app.post('/api/preferences', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'currency is required' });
     }
 
-    const candidate = currency.toUpperCase();
-    if (!SUPPORTED_CURRENCIES.has(candidate)) {
-      return res.status(400).json({ message: 'Unsupported currency' });
-    }
+    const candidate = normalizeCurrency(currency);
 
-    const portfolio = await readPortfolioForUser(req.user.id);
-    const nextPreferences = {
-      currency: candidate,
-      locale: currencyLocales[candidate] ?? defaultPreferences.locale
-    };
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
 
-    const next = {
-      ...portfolio,
-      preferences: nextPreferences
-    };
+    const preference = await prisma.preference.upsert({
+      where: { userId: sessionUser.id },
+      update: {
+        currency: candidate,
+        locale: currencyLocales[candidate] ?? defaultPreferences.locale
+      },
+      create: {
+        userId: sessionUser.id,
+        currency: candidate,
+        locale: currencyLocales[candidate] ?? defaultPreferences.locale
+      }
+    });
 
-    await writePortfolioForUser(req.user.id, next);
-    res.json(nextPreferences);
+    res.json(preference);
   } catch (error) {
     console.error('Failed to update preferences', error);
     res.status(500).json({ message: 'Failed to update preferences' });
@@ -597,9 +535,15 @@ app.post('/api/preferences', requireAuth, async (req, res) => {
 
 app.post('/api/portfolio/reset', requireAuth, async (req, res) => {
   try {
-    const portfolio = await readPortfolioForUser(req.user.id);
-    const next = createDefaultPortfolio({ preferences: portfolio.preferences });
-    await writePortfolioForUser(req.user.id, next);
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+
+    await prisma.trade.deleteMany({ where: { userId: sessionUser.id } });
+    await prisma.user.update({
+      where: { id: sessionUser.id },
+      data: { initialSeed: null }
+    });
+
     res.status(204).send();
   } catch (error) {
     console.error('Failed to reset portfolio', error);
@@ -628,14 +572,15 @@ app.post('/api/chat/assistant', requireAuth, async (req, res) => {
     .slice(-10);
 
   try {
-    const portfolio = await readPortfolioForUser(req.user.id);
-    const summary = await buildPortfolioSummary(portfolio);
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const summary = await buildPortfolioSummary(sessionUser.id);
 
     const summaryLines = [
       `Display currency: ${summary.currency}`,
-      `Initial seed: ${summary.initialSeed !== null ? formatNumber(summary.initialSeed) : 'Not set'}`,
-      `Total PnL: ${formatNumber(summary.totalPnL)}`,
-      `Current capital: ${summary.currentCapital !== null ? formatNumber(summary.currentCapital) : 'Unknown'}`,
+      `Initial seed: ${summary.initialSeed !== null ? summary.formatNumber(summary.initialSeed) : 'Not set'}`,
+      `Total PnL: ${summary.formatNumber(summary.totalPnL)}`,
+      `Current capital: ${summary.currentCapital !== null ? summary.formatNumber(summary.currentCapital) : 'Unknown'}`,
       `Total trades: ${summary.totalTrades}`,
       `Wins: ${summary.wins}`,
       `Losses: ${summary.losses}`
@@ -678,9 +623,20 @@ app.post('/api/chat/assistant', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/auth/logout', (req, res, next) => {
+  req.logout((logoutError) => {
+    if (logoutError) {
+      return next(logoutError);
+    }
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid');
+      res.status(204).send();
+    });
+  });
+});
+
 async function start() {
   try {
-    await mkdir(dataDir, { recursive: true });
     app.listen(PORT, () => {
       console.log(`Portfolio API server listening on http://localhost:${PORT}`);
     });
@@ -691,4 +647,14 @@ async function start() {
 }
 
 start();
+
+process.on('SIGINT', async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
 

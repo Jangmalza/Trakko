@@ -29,3 +29,5 @@ server/data/*.json
 .env.*
 server/.env
 server/.env.*
+
+/src/generated/prisma
