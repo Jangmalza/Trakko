@@ -1,23 +1,10 @@
-﻿import React, { useEffect } from 'react';
+﻿import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 
 const HeaderNavigation: React.FC = () => {
   const navigate = useNavigate();
-  const {
-    user,
-    hasChecked,
-    checking,
-    bootstrap,
-    logout,
-    getLoginUrl
-  } = useAuthStore();
-
-  useEffect(() => {
-    if (!hasChecked && !checking) {
-      void bootstrap();
-    }
-  }, [bootstrap, hasChecked, checking]);
+  const { user, logout, getLoginUrl } = useAuthStore();
 
   const handleLogin = () => {
     window.location.href = getLoginUrl();

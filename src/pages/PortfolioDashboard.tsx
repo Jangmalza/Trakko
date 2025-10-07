@@ -1,11 +1,13 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TradeEntryForm from '../components/TradeEntryForm';
 import SeedOverviewChart from '../components/SeedOverviewChart';
 import TradeEntriesList from '../components/TradeEntriesList';
 import HeaderNavigation from '../components/HeaderNavigation';
 import ChatAssistantPanel from '../components/ChatAssistantPanel';
+import GoalProgressCard from '../components/GoalProgressCard';
 import { usePortfolioStore } from '../store/portfolioStore';
+import { useShallow } from 'zustand/react/shallow';
 
 const DASHBOARD_TITLE = '일일 자본 트래커';
 const DASHBOARD_SUBTITLE = '각 거래가 전체 자본에 미치는 영향을 기록하고, 결정의 근거를 남겨 다음 전략에 반영하세요.';
@@ -15,6 +17,7 @@ const LOADING_MESSAGE = '데이터를 불러오는 중입니다...';
 const PortfolioDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const loadRequestedRef = useRef(false);
   const {
     initialSeed,
     trades,
@@ -23,14 +26,27 @@ const PortfolioDashboard: React.FC = () => {
     addTrade,
     error,
     clearError,
-    hasLoaded
-  } = usePortfolioStore();
+    hasLoaded,
+    performanceGoal,
+    goalLoading
+  } = usePortfolioStore(useShallow((state) => ({
+    initialSeed: state.initialSeed,
+    trades: state.trades,
+    loading: state.loading,
+    loadPortfolio: state.loadPortfolio,
+    addTrade: state.addTrade,
+    error: state.error,
+    clearError: state.clearError,
+    hasLoaded: state.hasLoaded,
+    performanceGoal: state.performanceGoal,
+    goalLoading: state.goalLoading
+  })));
 
   useEffect(() => {
-    if (!hasLoaded) {
-      void loadPortfolio();
-    }
-  }, [hasLoaded, loadPortfolio]);
+    if (loadRequestedRef.current) return;
+    loadRequestedRef.current = true;
+    void loadPortfolio();
+  }, [loadPortfolio]);
 
   useEffect(() => {
     if (hasLoaded && initialSeed === null) {
@@ -70,6 +86,9 @@ const PortfolioDashboard: React.FC = () => {
           <main className="mt-10 grid gap-10 lg:grid-cols-[320px_1fr]">
             <TradeEntryForm onSubmit={handleAddTrade} loading={loading} />
             <div className="space-y-8">
+              {performanceGoal && (
+                <GoalProgressCard summary={performanceGoal} loading={goalLoading} />
+              )}
               <SeedOverviewChart initialSeed={initialSeed} trades={trades} />
               <TradeEntriesList initialSeed={initialSeed} trades={trades} />
             </div>

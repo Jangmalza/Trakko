@@ -1,10 +1,24 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatCurrency';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useAuthStore } from '../store/authStore';
 import TrakkoAuthHero from '../components/TrakkoAuthHero';
 import { usePreferencesStore } from '../store/preferencesStore';
+import type { SupportedCurrency } from '../types/preferences';
+
+const currencyOptions: Array<{ value: SupportedCurrency; label: string; description: string }> = [
+  {
+    value: 'KRW',
+    label: '대한민국 원 (KRW)',
+    description: '원화 기준으로 표시하며 소수점을 사용하지 않습니다.'
+  },
+  {
+    value: 'USD',
+    label: '미국 달러 (USD)',
+    description: '달러 기준으로 표시하며 소수점 둘째 자리까지 표시합니다.'
+  }
+];
 
 const OnboardingSeed: React.FC = () => {
   const navigate = useNavigate();
@@ -21,25 +35,39 @@ const OnboardingSeed: React.FC = () => {
     user,
     checking,
     hasChecked,
-    bootstrap,
     getLoginUrl
   } = useAuthStore();
   const currency = usePreferencesStore((state) => state.currency);
+  const preferencesLoading = usePreferencesStore((state) => state.loading);
+  const preferencesInitialized = usePreferencesStore((state) => state.initialized);
+  const preferencesError = usePreferencesStore((state) => state.error);
+  const updateCurrency = usePreferencesStore((state) => state.updateCurrency);
+  const loadPreferences = usePreferencesStore((state) => state.loadPreferences);
+  const preferencesRequestedRef = useRef(false);
+  const portfolioLoadRequestedRef = useRef(false);
   const [seedInput, setSeedInput] = useState('');
   const [touched, setTouched] = useState(false);
-
+  
   useEffect(() => {
-    if (!hasChecked && !checking) {
-      void bootstrap();
+    if (!user || !hasChecked) {
+      portfolioLoadRequestedRef.current = false;
+      return;
     }
-  }, [bootstrap, hasChecked, checking]);
+
+    if (portfolioLoadRequestedRef.current) return;
+    portfolioLoadRequestedRef.current = true;
+    void loadPortfolio();
+  }, [user, hasChecked, loadPortfolio]);
 
   useEffect(() => {
     if (!user || !hasChecked) return;
-    if (!hasLoaded) {
-      void loadPortfolio();
+    if (preferencesInitialized || preferencesLoading || preferencesRequestedRef.current) {
+      return;
     }
-  }, [user, hasChecked, hasLoaded, loadPortfolio]);
+
+    preferencesRequestedRef.current = true;
+    void loadPreferences();
+  }, [user, hasChecked, preferencesInitialized, preferencesLoading, loadPreferences]);
 
   useEffect(() => {
     if (!user || !hasChecked) return;
@@ -72,6 +100,16 @@ const OnboardingSeed: React.FC = () => {
 
   const handleLogin = () => {
     window.location.href = getLoginUrl();
+  };
+
+  const handleCurrencySelect = async (value: SupportedCurrency) => {
+    if (value === currency || preferencesLoading) return;
+
+    try {
+      await updateCurrency(value);
+    } catch (updateError) {
+      console.error('Failed to update currency during onboarding', updateError);
+    }
   };
 
   if (!hasChecked || checking) {
@@ -107,7 +145,6 @@ const OnboardingSeed: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-10 px-6 py-12">
-        <TrakkoAuthHero />
         <header className="space-y-2 text-center">
           <p className="text-xs uppercase tracking-wide text-slate-500">Welcome</p>
           <h1 className="text-2xl font-semibold">시작 자본을 입력하세요</h1>
@@ -117,6 +154,46 @@ const OnboardingSeed: React.FC = () => {
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <section className="space-y-3">
+            <header className="text-left">
+              <p className="text-xs uppercase tracking-wide text-slate-500">표시 통화</p>
+              <h2 className="text-sm font-semibold text-slate-900">금액을 어떤 통화로 관리할까요?</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                선택한 통화로 초기 시드와 모든 거래 금액이 표시됩니다. 필요하면 나중에 설정에서 바꿀 수 있어요.
+              </p>
+            </header>
+
+            <div className="space-y-2">
+              {currencyOptions.map((option) => {
+                const selected = option.value === currency;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleCurrencySelect(option.value)}
+                    disabled={preferencesLoading}
+                    className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                      selected ? 'border-slate-900 bg-slate-900/5 text-slate-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    } ${preferencesLoading ? 'cursor-not-allowed opacity-70' : ''}`}
+                  >
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span>{option.label}</span>
+                      <span className={`h-2 w-2 rounded-full ${selected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{option.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {preferencesLoading && (
+              <p className="text-xs text-slate-400">표시 통화를 불러오는 중입니다...</p>
+            )}
+            {preferencesError && (
+              <p className="text-xs text-red-500">{preferencesError}</p>
+            )}
+          </section>
+
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
             초기 시드 ({currency})
             <input
@@ -146,7 +223,7 @@ const OnboardingSeed: React.FC = () => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || preferencesLoading || !preferencesInitialized}
             className="w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition disabled:bg-slate-300"
           >
             {loading ? '저장 중...' : '일지로 이동'}

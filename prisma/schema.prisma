@@ -17,6 +17,7 @@ model User {
   updatedAt    DateTime    @updatedAt
   preferences  Preference?
   trades       Trade[]
+  goals        PerformanceGoal[]
 }
 
 model Preference {
@@ -35,4 +36,18 @@ model Trade {
   tradeDate  DateTime
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PerformanceGoal {
+  id           String   @id @default(cuid())
+  userId       String
+  targetYear   Int
+  targetMonth  Int
+  targetAmount Decimal @db.Decimal(18, 2)
+  currency     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetYear, targetMonth])
 }

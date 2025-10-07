@@ -38,6 +38,45 @@ const defaultPreferences = {
   locale: currencyLocales[BASE_CURRENCY]
 };
 
+const CLIENT_BASE_URL_CLEAN = CLIENT_BASE_URL.replace(/\/$/, '');
+const CLIENT_ORIGIN = (() => {
+  try {
+    return new URL(CLIENT_BASE_URL_CLEAN).origin;
+  } catch (_error) {
+    return CLIENT_BASE_URL_CLEAN;
+  }
+})();
+
+const buildClientUrl = (pathname) => {
+  try {
+    return new URL(pathname, `${CLIENT_BASE_URL_CLEAN}/`).toString();
+  } catch (_error) {
+    return `${CLIENT_BASE_URL_CLEAN}${pathname}`;
+  }
+};
+
+const DEFAULT_AUTH_CALLBACK_URL = buildClientUrl('/auth/callback');
+const DEFAULT_POST_LOGIN_REDIRECT = buildClientUrl('/dashboard');
+const FAILURE_REDIRECT_URL = buildClientUrl('/?auth=failed');
+
+const resolveClientRedirect = (candidate, fallback) => {
+  if (typeof candidate !== 'string' || candidate.length === 0) {
+    return fallback;
+  }
+
+  try {
+    const target = new URL(candidate, `${CLIENT_BASE_URL_CLEAN}/`);
+    if (target.origin !== CLIENT_ORIGIN) {
+      return fallback;
+    }
+    return target.toString();
+  } catch (_error) {
+    return fallback;
+  }
+};
+
+const GOOGLE_AUTH_CONFIGURED = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
+
 const RATE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const FALLBACK_KRW_PER_USD = 1300;
 
@@ -45,6 +84,128 @@ let cachedRates = null;
 let cachedRatesFetchedAt = 0;
 
 const openaiClient = OPENAI_API_KEY ? new OpenAI({ apiKey: OPENAI_API_KEY }) : null;
+
+const getCurrentYearMonth = (date = new Date()) => ({
+  year: date.getFullYear(),
+  month: date.getMonth() + 1
+});
+
+const clampYearMonth = (year, month) => {
+  const safeYear = Number.isInteger(year) ? year : new Date().getFullYear();
+  let safeMonth = Number.isInteger(month) ? month : new Date().getMonth() + 1;
+  if (safeMonth < 1) safeMonth = 1;
+  if (safeMonth > 12) safeMonth = 12;
+  return { year: safeYear, month: safeMonth };
+};
+
+const formatMonthLabel = (year, month, displayCurrency) => {
+  const locale = currencyLocales[displayCurrency] ?? 'en-US';
+  const formatter = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' });
+  return formatter.format(new Date(year, month - 1, 1));
+};
+
+const roundCurrency = (value, currency) => {
+  if (!Number.isFinite(value)) return 0;
+  const fractionDigits = currency === 'KRW' ? 0 : 2;
+  const factor = 10 ** fractionDigits;
+  return Math.round(value * factor) / factor;
+};
+
+class AssistantError extends Error {
+  constructor(message, { status = 500, code } = {}) {
+    super(message);
+    this.name = 'AssistantError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+const extractResponseText = (response) => {
+  if (!response) return '';
+
+  if (typeof response.output_text === 'string' && response.output_text.trim().length > 0) {
+    return response.output_text.trim();
+  }
+
+  const segments = Array.isArray(response.output)
+    ? response.output.flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        const content = Array.isArray(item.content) ? item.content : [];
+        return content
+          .filter((part) => part && typeof part.text === 'string')
+          .map((part) => part.text);
+      })
+    : [];
+
+  return segments.join(' ').trim();
+};
+
+async function createAssistantReply(messages) {
+  if (!openaiClient) {
+    throw new Error('Chat assistant is not configured.');
+  }
+
+  try {
+    const response = await openaiClient.responses.create({
+      model: OPENAI_MODEL,
+      max_output_tokens: 600,
+      input: messages
+    });
+
+    const reply = extractResponseText(response);
+    if (reply) {
+      return reply;
+    }
+
+    console.warn('OpenAI Responses API returned empty output, falling back to chat completions.');
+  } catch (error) {
+    const status = (error && typeof error === 'object' && 'status' in error) ? error.status : undefined;
+    const code = (error && typeof error === 'object' && 'code' in error) ? error.code : undefined;
+    const quotaExceeded = status === 429 || code === 'insufficient_quota';
+
+    if (quotaExceeded) {
+      throw new AssistantError('OpenAI 사용 한도를 초과했습니다. 결제 상태를 확인하거나 잠시 후 다시 시도해주세요.', {
+        status: 429,
+        code: 'insufficient_quota'
+      });
+    }
+
+    if (status === 400 || status === 404) {
+      console.warn('OpenAI Responses API not available for this model, falling back to chat completions.', error);
+    } else {
+      throw error;
+    }
+  }
+
+  try {
+    const completion = await openaiClient.chat.completions.create({
+      model: OPENAI_MODEL,
+      max_completion_tokens: 600,
+      messages
+    });
+
+    const reply = completion.choices?.[0]?.message?.content?.trim();
+
+    if (!reply) {
+      throw new AssistantError('어시스턴트 응답을 생성하지 못했습니다.', { status: 502 });
+    }
+
+    return reply;
+  } catch (error) {
+    const status = (error && typeof error === 'object' && 'status' in error) ? error.status : undefined;
+    const code = (error && typeof error === 'object' && 'code' in error) ? error.code : undefined;
+    const quotaExceeded = status === 429 || code === 'insufficient_quota';
+
+    if (quotaExceeded) {
+      throw new AssistantError('OpenAI 사용 한도를 초과했습니다. 결제 상태를 확인하거나 잠시 후 다시 시도해주세요.', {
+        status: 429,
+        code: 'insufficient_quota'
+      });
+    }
+
+    throw error;
+  }
+}
 
 async function fetchRatesFromApi() {
   try {
@@ -202,12 +363,83 @@ async function getPortfolioResponse(userId) {
     user.trades.map((trade) => mapTradeForResponse(trade, baseCurrency, displayCurrency))
   );
 
+  const { year, month } = getCurrentYearMonth();
+  const performanceGoal = await buildPerformanceGoalSummary({
+    userId,
+    baseCurrency,
+    displayCurrency,
+    trades,
+    year,
+    month
+  });
+
   return {
     initialSeed,
     trades,
     baseCurrency,
     displayCurrency,
-    exchangeRate
+    exchangeRate,
+    performanceGoal
+  };
+}
+
+async function buildPerformanceGoalSummary({ userId, baseCurrency, displayCurrency, trades, year, month }) {
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+  const achievedAmountRaw = trades
+    .filter((trade) => trade.tradeDate?.startsWith(monthKey))
+    .reduce((acc, trade) => acc + trade.profitLoss, 0);
+
+  const achievedAmount = roundCurrency(achievedAmountRaw, displayCurrency);
+  const monthLabel = formatMonthLabel(year, month, displayCurrency);
+
+  const goal = await prisma.performanceGoal.findUnique({
+    where: {
+      userId_targetYear_targetMonth: {
+        userId,
+        targetYear: year,
+        targetMonth: month
+      }
+    }
+  });
+
+  if (!goal) {
+    return {
+      goal: null,
+      achievedAmount,
+      remainingAmount: null,
+      progressPercent: null,
+      month: {
+        year,
+        month,
+        label: monthLabel
+      }
+    };
+  }
+
+  const targetAmountBase = Number(goal.targetAmount);
+  const targetAmountDisplayRaw = await convertAmount(targetAmountBase, baseCurrency, displayCurrency);
+  const targetAmountDisplay = roundCurrency(targetAmountDisplayRaw, displayCurrency);
+  const remainingAmount = roundCurrency(targetAmountDisplay - achievedAmount, displayCurrency);
+  const progressPercent = targetAmountDisplay > 0
+    ? Math.min(100, Math.max(0, (achievedAmount / targetAmountDisplay) * 100))
+    : null;
+
+  return {
+    goal: {
+      id: goal.id,
+      targetAmount: targetAmountDisplay,
+      currency: displayCurrency,
+      targetYear: goal.targetYear,
+      targetMonth: goal.targetMonth
+    },
+    achievedAmount,
+    remainingAmount,
+    progressPercent: progressPercent !== null ? Math.round(progressPercent * 100) / 100 : null,
+    month: {
+      year,
+      month,
+      label: monthLabel
+    }
   };
 }
 
@@ -284,7 +516,7 @@ passport.deserializeUser((user, done) => {
   done(null, user);
 });
 
-if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
+if (GOOGLE_AUTH_CONFIGURED) {
   passport.use(new GoogleStrategy(
     {
       clientID: GOOGLE_CLIENT_ID,
@@ -303,6 +535,67 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
 } else {
   console.warn('Google OAuth credentials are not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to enable login.');
 }
+
+app.get('/api/auth/google', (req, res, next) => {
+  if (!GOOGLE_AUTH_CONFIGURED) {
+    return res.status(503).json({ message: 'Google OAuth is not configured.' });
+  }
+
+  const redirectTarget = resolveClientRedirect(req.query.redirect, DEFAULT_AUTH_CALLBACK_URL);
+
+  if (req.session) {
+    req.session.authRedirect = redirectTarget;
+  }
+
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    prompt: 'select_account',
+    session: true
+  })(req, res, next);
+});
+
+app.get(
+  '/api/auth/google/callback',
+  (req, res, next) => {
+    if (!GOOGLE_AUTH_CONFIGURED) {
+      return res.status(503).json({ message: 'Google OAuth is not configured.' });
+    }
+
+    passport.authenticate('google', {
+      failureRedirect: FAILURE_REDIRECT_URL,
+      session: true
+    })(req, res, next);
+  },
+  async (req, res) => {
+    const sessionUser = req.user;
+
+    if (!sessionUser) {
+      return res.redirect(FAILURE_REDIRECT_URL);
+    }
+
+    try {
+      await ensureUserRecord(sessionUser);
+    } catch (error) {
+      console.error('Failed to ensure user record after Google login', error);
+      return res.redirect(FAILURE_REDIRECT_URL);
+    }
+
+    const redirectTarget = req.session?.authRedirect ?? DEFAULT_POST_LOGIN_REDIRECT;
+
+    if (req.session) {
+      delete req.session.authRedirect;
+      req.session.save((saveError) => {
+        if (saveError) {
+          console.error('Failed to persist session after Google login', saveError);
+        }
+        res.redirect(redirectTarget);
+      });
+      return;
+    }
+
+    res.redirect(redirectTarget);
+  }
+);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -551,6 +844,107 @@ app.post('/api/portfolio/reset', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/goals/current', requireAuth, async (req, res) => {
+  try {
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const snapshot = await getPortfolioResponse(sessionUser.id);
+    res.json(snapshot.performanceGoal);
+  } catch (error) {
+    console.error('Failed to read performance goal', error);
+    res.status(500).json({ message: 'Failed to read performance goal' });
+  }
+});
+
+app.post('/api/goals/current', requireAuth, async (req, res) => {
+  try {
+    const {
+      targetAmount,
+      currency,
+      year,
+      month
+    } = req.body ?? {};
+
+    const amountValue = Number(targetAmount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      return res.status(400).json({ message: 'targetAmount must be a positive number' });
+    }
+
+    const { year: targetYear, month: targetMonth } = clampYearMonth(Number(year), Number(month));
+
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const user = await getUserWithRelations(sessionUser.id);
+    const baseCurrency = normalizeCurrency(user.baseCurrency ?? BASE_CURRENCY);
+    const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
+    const sourceCurrency = normalizeCurrency(currency ?? displayCurrency);
+
+    const amountInBase = await convertAmount(amountValue, sourceCurrency, baseCurrency);
+    if (!Number.isFinite(amountInBase) || amountInBase <= 0) {
+      return res.status(400).json({ message: 'Failed to convert target amount to base currency' });
+    }
+
+    await prisma.performanceGoal.upsert({
+      where: {
+        userId_targetYear_targetMonth: {
+          userId: sessionUser.id,
+          targetYear,
+          targetMonth
+        }
+      },
+      update: {
+        targetAmount: new Prisma.Decimal(amountInBase.toFixed(2)),
+        currency: baseCurrency
+      },
+      create: {
+        userId: sessionUser.id,
+        targetYear,
+        targetMonth,
+        targetAmount: new Prisma.Decimal(amountInBase.toFixed(2)),
+        currency: baseCurrency
+      }
+    });
+
+    const snapshot = await getPortfolioResponse(sessionUser.id);
+    res.json(snapshot.performanceGoal);
+  } catch (error) {
+    console.error('Failed to upsert performance goal', error);
+    res.status(500).json({ message: 'Failed to upsert performance goal' });
+  }
+});
+
+app.delete('/api/goals/current', requireAuth, async (req, res) => {
+  try {
+    const { year, month } = req.query ?? {};
+    const { year: targetYear, month: targetMonth } = clampYearMonth(Number(year), Number(month));
+
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+
+    const existingGoal = await prisma.performanceGoal.findUnique({
+      where: {
+        userId_targetYear_targetMonth: {
+          userId: sessionUser.id,
+          targetYear,
+          targetMonth
+        }
+      }
+    });
+
+    if (existingGoal) {
+      await prisma.performanceGoal.delete({
+        where: { id: existingGoal.id }
+      });
+    }
+
+    const snapshot = await getPortfolioResponse(sessionUser.id);
+    res.json(snapshot.performanceGoal);
+  } catch (error) {
+    console.error('Failed to delete performance goal', error);
+    res.status(500).json({ message: 'Failed to delete performance goal' });
+  }
+});
+
 app.post('/api/chat/assistant', requireAuth, async (req, res) => {
   if (!openaiClient) {
     return res.status(503).json({ message: 'Chat assistant is not configured.' });
@@ -599,27 +993,26 @@ app.post('/api/chat/assistant', requireAuth, async (req, res) => {
 
     const contextPrompt = `Portfolio snapshot:\n${summaryLines.join('\n')}\n\nRecent trades:\n${recentLines}`;
 
-    const completion = await openaiClient.chat.completions.create({
-      model: OPENAI_MODEL,
-      temperature: 0.2,
-      max_tokens: 600,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'system', content: contextPrompt },
-        ...sanitizedMessages
-      ]
-    });
-
-    const reply = completion.choices?.[0]?.message?.content?.trim();
-
-    if (!reply) {
-      throw new Error('Missing content in assistant response');
-    }
+    const reply = await createAssistantReply([
+      { role: 'system', content: systemPrompt },
+      { role: 'system', content: contextPrompt },
+      ...sanitizedMessages
+    ]);
 
     res.json({ message: reply });
   } catch (error) {
-    console.error('Failed to generate assistant response', error);
-    res.status(500).json({ message: 'Failed to generate assistant response' });
+    const status = error instanceof AssistantError && typeof error.status === 'number'
+      ? error.status
+      : 500;
+    const message = error instanceof AssistantError
+      ? error.message
+      : 'Failed to generate assistant response';
+
+    if (!(error instanceof AssistantError)) {
+      console.error('Failed to generate assistant response', error);
+    }
+
+    res.status(status).json({ message });
   }
 });
 

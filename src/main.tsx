@@ -6,6 +6,7 @@ import OnboardingSeed from './pages/OnboardingSeed.tsx';
 import PortfolioDashboard from './pages/PortfolioDashboard.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import AuthCallback from './pages/AuthCallback.tsx';
+import { useAuthBootstrap } from './hooks/useAuthBootstrap.ts';
 
 const router = createBrowserRouter([
   { path: '/', element: <OnboardingSeed /> },
@@ -15,8 +16,13 @@ const router = createBrowserRouter([
   { path: '*', element: <Navigate to="/" replace /> }
 ]);
 
+const AppRoot = () => {
+  useAuthBootstrap();
+  return <RouterProvider router={router} />;
+};
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <AppRoot />
   </StrictMode>
 );

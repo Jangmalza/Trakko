@@ -1,6 +1,7 @@
 ﻿import { create } from 'zustand';
-import type { NewTradeEntry, TradeEntry } from '../data/portfolioTypes';
+import type { NewTradeEntry, TradeEntry, PerformanceGoalSummary, UpsertGoalPayload } from '../data/portfolioTypes';
 import { createTradeEntry, fetchPortfolio, resetPortfolio, upsertInitialSeed, updateTradeEntry, deleteTradeEntry } from '../api/portfolioApi';
+import { fetchCurrentGoal, upsertCurrentGoal, deleteCurrentGoal } from '../api/goalsApi';
 import { usePreferencesStore } from './preferencesStore';
 import type { SupportedCurrency } from '../types/preferences';
 
@@ -10,9 +11,12 @@ interface PortfolioState {
   baseCurrency: SupportedCurrency;
   displayCurrency: SupportedCurrency;
   exchangeRate: number | null;
+  performanceGoal: PerformanceGoalSummary | null;
   loading: boolean;
   error: string | null;
   hasLoaded: boolean;
+  goalLoading: boolean;
+  goalError: string | null;
 
   loadPortfolio: () => Promise<void>;
   setInitialSeed: (seed: number) => Promise<void>;
@@ -20,6 +24,9 @@ interface PortfolioState {
   updateTrade: (tradeId: string, payload: NewTradeEntry) => Promise<void>;
   deleteTrade: (tradeId: string) => Promise<void>;
   resetData: () => Promise<void>;
+  refreshPerformanceGoal: () => Promise<void>;
+  upsertGoal: (payload: UpsertGoalPayload) => Promise<void>;
+  deleteGoal: () => Promise<void>;
   logout: () => void;
   clearError: () => void;
 }
@@ -32,9 +39,12 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
   baseCurrency: BASE_CURRENCY_DEFAULT,
   displayCurrency: usePreferencesStore.getState().currency,
   exchangeRate: null,
+  performanceGoal: null,
   loading: false,
   error: null,
   hasLoaded: false,
+  goalLoading: false,
+  goalError: null,
 
   loadPortfolio: async () => {
     set({ loading: true, error: null });
@@ -46,6 +56,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
         baseCurrency: snapshot.baseCurrency,
         displayCurrency: snapshot.displayCurrency,
         exchangeRate: snapshot.exchangeRate ?? null,
+        performanceGoal: snapshot.performanceGoal ?? null,
         loading: false,
         hasLoaded: true,
         error: null
@@ -71,6 +82,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
         baseCurrency: snapshot.baseCurrency,
         displayCurrency: snapshot.displayCurrency,
         exchangeRate: snapshot.exchangeRate ?? null,
+        performanceGoal: snapshot.performanceGoal ?? null,
         loading: false,
         hasLoaded: true,
         error: null
@@ -96,6 +108,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
           error: null
         };
       });
+      await get().refreshPerformanceGoal();
     } catch (error) {
       console.error('Failed to add trade', error);
       set({ loading: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -119,6 +132,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
           error: null
         };
       });
+      await get().refreshPerformanceGoal();
     } catch (error) {
       console.error('Failed to update trade', error);
       set({ loading: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -136,6 +150,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
         hasLoaded: true,
         error: null
       }));
+      await get().refreshPerformanceGoal();
     } catch (error) {
       console.error('Failed to delete trade', error);
       set({ loading: false, error: error instanceof Error ? error.message : 'Unknown error' });
@@ -154,6 +169,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
         baseCurrency: snapshot.baseCurrency,
         displayCurrency: snapshot.displayCurrency,
         exchangeRate: snapshot.exchangeRate ?? null,
+        performanceGoal: snapshot.performanceGoal ?? null,
         loading: false,
         hasLoaded: true,
         error: null
@@ -165,6 +181,50 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
     }
   },
 
+  refreshPerformanceGoal: async () => {
+    set({ goalLoading: true, goalError: null });
+    try {
+      const summary = await fetchCurrentGoal();
+      set({ performanceGoal: summary ?? null, goalLoading: false });
+    } catch (error) {
+      console.error('Failed to refresh performance goal', error);
+      set({
+        goalLoading: false,
+        goalError: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  },
+
+  upsertGoal: async (payload: UpsertGoalPayload) => {
+    set({ goalLoading: true, goalError: null });
+    try {
+      const summary = await upsertCurrentGoal(payload);
+      set({ performanceGoal: summary ?? null, goalLoading: false, error: null });
+    } catch (error) {
+      console.error('Failed to upsert performance goal', error);
+      set({
+        goalLoading: false,
+        goalError: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  },
+
+  deleteGoal: async () => {
+    set({ goalLoading: true, goalError: null });
+    try {
+      const summary = await deleteCurrentGoal();
+      set({ performanceGoal: summary ?? null, goalLoading: false, error: null });
+    } catch (error) {
+      console.error('Failed to delete performance goal', error);
+      set({
+        goalLoading: false,
+        goalError: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  },
+
   logout: () => {
     set({
       initialSeed: null,
@@ -172,13 +232,16 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
       baseCurrency: BASE_CURRENCY_DEFAULT,
       displayCurrency: usePreferencesStore.getState().currency,
       exchangeRate: null,
+      performanceGoal: null,
       loading: false,
       error: null,
-      hasLoaded: false
+      hasLoaded: false,
+      goalLoading: false,
+      goalError: null
     });
   },
 
   clearError: () => {
-    set({ error: null });
+    set({ error: null, goalError: null });
   }
 }));

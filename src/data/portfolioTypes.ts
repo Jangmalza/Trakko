@@ -23,4 +23,30 @@ export interface PortfolioSnapshot {
   baseCurrency: SupportedCurrency;
   displayCurrency: SupportedCurrency;
   exchangeRate?: number;
+  performanceGoal: PerformanceGoalSummary;
+}
+
+export interface PerformanceGoalSummary {
+  goal: {
+    id: string;
+    targetAmount: number;
+    currency: SupportedCurrency;
+    targetYear: number;
+    targetMonth: number;
+  } | null;
+  achievedAmount: number;
+  remainingAmount: number | null;
+  progressPercent: number | null;
+  month: {
+    year: number;
+    month: number;
+    label: string;
+  };
+}
+
+export interface UpsertGoalPayload {
+  targetAmount: number;
+  currency: SupportedCurrency;
+  year?: number;
+  month?: number;
 }
