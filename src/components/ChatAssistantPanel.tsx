@@ -139,55 +139,55 @@ const ChatAssistantPanel: React.FC<ChatAssistantPanelProps> = ({ trades, initial
   const disabled = sending || input.trim().length === 0;
 
   return (
-    <aside className="flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
-      <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+    <aside className="flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900">
+      <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-400">AI Assistant</p>
-          <h2 className="text-sm font-semibold text-slate-900">Trakko Insights</h2>
+          <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">AI Assistant</p>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Trakko Insights</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+          className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
         >
           닫기
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 text-sm text-slate-700">
+      <div className="flex-1 overflow-y-auto px-4 py-4 text-sm text-slate-700 dark:text-slate-300">
         <div className="space-y-4">
           {summary ? (
-            <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">현재 요약</p>
+            <div className="rounded border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/60">
+              <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">현재 요약</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <div>
-                  <p className="text-xs text-slate-500">총 손익</p>
-                  <p className="text-sm font-semibold text-slate-900">{formatSignedCurrency(summary.totalPnL)}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">총 손익</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatSignedCurrency(summary.totalPnL)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">현재 자본</p>
-                  <p className="text-sm font-semibold text-slate-900">{formatCurrency(summary.currentCapital)}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">현재 자본</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(summary.currentCapital)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">승률</p>
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">승률</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {summary.totalTrades === 0 ? '데이터 없음' : `${Math.round((summary.wins / summary.totalTrades) * 100)}%`}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">총 거래 수</p>
-                  <p className="text-sm font-semibold text-slate-900">{summary.totalTrades}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">총 거래 수</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{summary.totalTrades}</p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+            <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
               아직 초기 시드나 거래가 없습니다. 데이터를 추가하면 맞춤형 분석을 제공할 수 있어요.
             </div>
           )}
 
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400">빠른 질문</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">빠른 질문</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {QUICK_PROMPTS.map((prompt) => (
                 <button
@@ -195,7 +195,7 @@ const ChatAssistantPanel: React.FC<ChatAssistantPanelProps> = ({ trades, initial
                   type="button"
                   onClick={() => handleQuickPrompt(prompt)}
                   disabled={sending}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
                 >
                   {prompt}
                 </button>
@@ -207,12 +207,12 @@ const ChatAssistantPanel: React.FC<ChatAssistantPanelProps> = ({ trades, initial
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                     message.role === 'user'
-                      ? 'bg-slate-900 text-white'
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                       : message.isError
-                        ? 'bg-red-50 text-red-600'
-                        : 'bg-slate-100 text-slate-800'
+                        ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-300'
+                        : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100'
                   }`}
                 >
                   {message.content}
@@ -224,19 +224,19 @@ const ChatAssistantPanel: React.FC<ChatAssistantPanelProps> = ({ trades, initial
         </div>
       </div>
 
-      <footer className="border-t border-slate-200 px-4 py-3">
+      <footer className="border-t border-slate-200 px-4 py-3 dark:border-slate-800">
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <textarea
             value={input}
             onChange={(event) => setInput(event.target.value)}
             rows={2}
             placeholder="무엇이 궁금한가요?"
-            className="flex-1 resize-none rounded border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className="flex-1 resize-none rounded border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-700"
           />
           <button
             type="submit"
             disabled={disabled}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
           >
             {sending ? '응답 대기...' : '보내기'}
           </button>

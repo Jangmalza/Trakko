@@ -21,7 +21,7 @@ const AuthCallback: React.FC = () => {
   }, [refetch, loadPortfolio, navigate]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white text-slate-600">
+    <div className="flex min-h-screen items-center justify-center bg-white text-slate-600 dark:bg-slate-950 dark:text-slate-300">
       로그인 정보를 확인하는 중입니다...
     </div>
   );

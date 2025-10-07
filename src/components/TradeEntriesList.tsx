@@ -92,60 +92,60 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
   return (
     <section className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">{INITIAL_SEED_LABEL} ({currency})</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900">{formatCurrency(initialSeed)}</p>
+        <div className="rounded border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs text-slate-500 dark:text-slate-400">{INITIAL_SEED_LABEL} ({currency})</p>
+          <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(initialSeed)}</p>
         </div>
-        <div className="rounded border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">{TOTAL_PNL_LABEL} ({currency})</p>
+        <div className="rounded border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs text-slate-500 dark:text-slate-400">{TOTAL_PNL_LABEL} ({currency})</p>
           <p className={'mt-1 text-xl font-semibold ' + totalTone}>{formatSignedCurrency(totalPnL)}</p>
         </div>
-        <div className="rounded border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">{CURRENT_CAPITAL_LABEL} ({currency})</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900">{formatCurrency(currentSeed)}</p>
+        <div className="rounded border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-xs text-slate-500 dark:text-slate-400">{CURRENT_CAPITAL_LABEL} ({currency})</p>
+          <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(currentSeed)}</p>
         </div>
       </div>
 
-      <div className="rounded border border-slate-200 bg-white">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <h2 className="text-sm font-semibold text-slate-900">{LIST_TITLE}</h2>
-          <p className="mt-1 text-xs text-slate-500">{LIST_SUBTITLE}</p>
+      <div className="rounded border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{LIST_TITLE}</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{LIST_SUBTITLE}</p>
         </div>
         {sorted.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-slate-500">{EMPTY_MESSAGE}</div>
+          <div className="px-5 py-12 text-center text-sm text-slate-500 dark:text-slate-400">{EMPTY_MESSAGE}</div>
         ) : (
-          <ul className="divide-y divide-slate-200">
+          <ul className="divide-y divide-slate-200 dark:divide-slate-800">
             {sorted.map((trade) => {
-              const tone = trade.profitLoss >= 0 ? 'text-emerald-600' : 'text-red-600';
+              const tone = trade.profitLoss >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
               return (
                 <li key={trade.id} className="grid gap-4 px-5 py-4 sm:grid-cols-[120px_120px_1fr]">
                   <div>
-                    <p className="text-xs text-slate-500">{DATE_LABEL}</p>
-                    <p className="mt-1 text-sm font-medium text-slate-900">{trade.tradeDate}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{DATE_LABEL}</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{trade.tradeDate}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">{TICKER_LABEL}</p>
-                    <p className="mt-1 text-sm font-medium text-slate-900">{trade.ticker}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{TICKER_LABEL}</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{trade.ticker}</p>
                   </div>
                   <div className="space-y-2">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-xs text-slate-500">{PROFIT_LABEL} ({currency})</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{PROFIT_LABEL} ({currency})</p>
                         <p className={'mt-1 text-sm font-semibold ' + tone}>{formatSignedCurrency(trade.profitLoss)}</p>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-slate-400">
+                      <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500">
                         <span>{LOGGED_LABEL} {new Date(trade.createdAt).toLocaleString()}</span>
                         <button
                           type="button"
                           onClick={() => handleEditClick(trade)}
-                          className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+                          className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                         >
                           {EDIT_LABEL}
                         </button>
                       </div>
                     </div>
                     {trade.rationale && (
-                      <p className="text-sm leading-relaxed text-slate-600">{trade.rationale}</p>
+                      <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{trade.rationale}</p>
                     )}
                   </div>
                 </li>

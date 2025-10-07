@@ -7,6 +7,7 @@ import PortfolioDashboard from './pages/PortfolioDashboard.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import AuthCallback from './pages/AuthCallback.tsx';
 import { useAuthBootstrap } from './hooks/useAuthBootstrap.ts';
+import { useThemeStore } from './store/themeStore.ts';
 
 const router = createBrowserRouter([
   { path: '/', element: <OnboardingSeed /> },
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
 
 const AppRoot = () => {
   useAuthBootstrap();
+  useThemeStore((state) => state.theme);
   return <RouterProvider router={router} />;
 };
 

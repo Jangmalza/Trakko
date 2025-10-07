@@ -141,23 +141,23 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <HeaderNavigation />
       <div className="mx-auto max-w-3xl px-6 py-12">
         <header className="mb-8 space-y-2">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Settings</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Settings</p>
           <h1 className="text-2xl font-semibold">계정 및 데이터 관리</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Google 로그인과 데이터 초기화 기능을 이곳에서 관리합니다. 로그인 상태에서만 데이터 초기화가 가능합니다.
           </p>
         </header>
 
         <div className="space-y-6">
-          <section className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-700">
-            <h2 className="text-base font-semibold text-slate-900">표시 통화</h2>
-            <p className="mt-2 text-sm text-slate-500">대시보드와 거래 입력에서 사용할 기본 통화를 선택하세요.</p>
+          <section className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">표시 통화</h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">대시보드와 거래 입력에서 사용할 기본 통화를 선택하세요.</p>
             {preferencesLoading && !preferencesInitialized && (
-              <p className="mt-3 text-xs text-slate-400">표시 통화를 불러오는 중입니다...</p>
+              <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">표시 통화를 불러오는 중입니다...</p>
             )}
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {currencyOptions.map((option) => {
@@ -181,38 +181,40 @@ const SettingsPage: React.FC = () => {
                     disabled={disabled}
                     aria-pressed={selected}
                     className={`flex flex-col gap-2 rounded-lg border px-4 py-3 text-left transition ${
-                      selected ? 'border-slate-900 bg-slate-900/5' : 'border-slate-200 hover:border-slate-300'
+                      selected
+                        ? 'border-slate-900 bg-slate-900/5 dark:border-slate-500 dark:bg-slate-800/60'
+                        : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
                     } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
                   >
-                    <span className="flex items-center justify-between text-sm font-semibold text-slate-900">
+                    <span className="flex items-center justify-between text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {option.label}
                       <span
-                        className={`h-2 w-2 rounded-full ${selected ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                        className={`h-2 w-2 rounded-full ${selected ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
                         aria-hidden
                       />
                     </span>
-                    <span className="text-xs text-slate-500">{option.description}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{option.description}</span>
                   </button>
                 );
               })}
             </div>
             {!user && (
-              <p className="mt-3 text-xs text-slate-400">로그인 후에만 통화를 변경할 수 있습니다.</p>
+              <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">로그인 후에만 통화를 변경할 수 있습니다.</p>
             )}
             {preferencesError && (
               <p className="mt-3 text-xs text-red-500">{preferencesError}</p>
             )}
           </section>
 
-          <section className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-700">
-            <h2 className="text-base font-semibold text-slate-900">성과 목표</h2>
-            <p className="mt-2 text-sm text-slate-500">
+          <section className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">성과 목표</h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               {currentMonthLabel ? `${currentMonthLabel} 손익 목표를 설정하세요.` : '이번 달 손익 목표를 설정하세요.'}
               {' '}목표 금액은 현재 표시 통화 기준으로 저장됩니다.
             </p>
 
             <form onSubmit={handleGoalSubmit} className="mt-4 space-y-3">
-              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                 목표 금액 ({currency})
                 <input
                   type="text"
@@ -229,7 +231,7 @@ const SettingsPage: React.FC = () => {
                   onBlur={() => setGoalTouched(true)}
                   placeholder="예: 2000000"
                   disabled={goalActionsDisabled}
-                  className="w-full rounded border border-slate-300 px-3 py-2 text-base text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 disabled:bg-slate-100"
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-base text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-800"
                 />
               </label>
 
@@ -245,7 +247,7 @@ const SettingsPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={goalActionsDisabled || !goalValid}
-                  className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition disabled:bg-slate-300"
+                  className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition disabled:bg-slate-300 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
                 >
                   {goalLoading ? '저장 중...' : performanceGoal?.goal ? '목표 업데이트' : '목표 저장'}
                 </button>
@@ -254,7 +256,7 @@ const SettingsPage: React.FC = () => {
                     type="button"
                     onClick={handleGoalDelete}
                     disabled={goalActionsDisabled}
-                    className="inline-flex items-center justify-center rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                    className="inline-flex items-center justify-center rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 dark:border-red-400/40 dark:text-red-300 dark:hover:bg-red-500/10 dark:disabled:border-slate-700 dark:disabled:text-slate-600"
                   >
                     목표 삭제
                   </button>
@@ -264,43 +266,43 @@ const SettingsPage: React.FC = () => {
 
             <div className="mt-6 grid gap-4 sm:grid-cols-4">
               <div>
-                <p className="text-xs text-slate-500">목표 금액</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">
+                <p className="text-xs text-slate-500 dark:text-slate-400">목표 금액</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {performanceGoal?.goal ? formatCurrency(performanceGoal.goal.targetAmount) : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">누적 손익</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{formatCurrency(performanceGoal?.achievedAmount ?? 0)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">누적 손익</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(performanceGoal?.achievedAmount ?? 0)}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">남은 금액</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">
+                <p className="text-xs text-slate-500 dark:text-slate-400">남은 금액</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
                   {performanceGoal?.goal && performanceGoal.remainingAmount !== null
                     ? formatCurrency(performanceGoal.remainingAmount)
                     : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">달성률</p>
-                <p className="mt-1 text-sm font-semibold text-slate-900">{progressText}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">달성률</p>
+                <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{progressText}</p>
               </div>
             </div>
 
             {!user && (
-              <p className="mt-4 text-xs text-slate-400">로그인 후에 성과 목표를 설정할 수 있습니다.</p>
+              <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">로그인 후에 성과 목표를 설정할 수 있습니다.</p>
             )}
           </section>
 
           <ResetPortfolioSection onResetClick={() => setModalOpen(true)} disabled={!user} />
 
           {!user && (
-            <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600">
+            <div className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
               <p>데이터 초기화 기능을 사용하려면 먼저 Google 계정으로 로그인하세요.</p>
               <button
                 type="button"
                 onClick={handleLogin}
-                className="mt-4 w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                className="mt-4 w-full rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
               >
                 Google 로그인
               </button>

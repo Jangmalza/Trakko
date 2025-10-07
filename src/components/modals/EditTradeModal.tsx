@@ -97,13 +97,13 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-lg bg-white p-6 text-sm text-slate-700 shadow-xl"
+        className="w-full max-w-md rounded-lg bg-white p-6 text-sm text-slate-700 shadow-xl dark:bg-slate-900 dark:text-slate-200"
       >
-        <h2 className="text-base font-semibold text-slate-900">{TITLE}</h2>
-        <p className="mt-2 text-xs text-slate-500">{DESCRIPTION}</p>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{TITLE}</h2>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{DESCRIPTION}</p>
 
         <div className="mt-4 space-y-3">
-          <label className="block text-xs font-medium text-slate-600">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
             {TICKER_LABEL}
             <input
               type="text"
@@ -112,11 +112,11 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
                 setTicker(event.target.value.toUpperCase());
                 setLocalError(null);
               }}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-600">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
             {PROFIT_LABEL} ({currency})
             <input
               type="text"
@@ -125,11 +125,11 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
                 setProfitLoss(event.target.value.replace(/[^0-9+-.,]/g, ''));
                 setLocalError(null);
               }}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-600">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
             {DATE_LABEL}
             <input
               type="date"
@@ -138,17 +138,17 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
                 setTradeDate(event.target.value);
                 setLocalError(null);
               }}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
             />
           </label>
 
-          <label className="block text-xs font-medium text-slate-600">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
             {NOTE_LABEL}
             <textarea
               value={rationale}
               onChange={(event) => setRationale(event.target.value)}
               rows={4}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0"
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
               placeholder="어떤 판단으로 거래했는지 자유롭게 적어주세요."
             />
           </label>
@@ -168,14 +168,14 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
               type="button"
               onClick={onCancel}
               disabled={submitting || deleteSubmitting}
-              className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               {CANCEL_LABEL}
             </button>
             <button
               type="submit"
               disabled={!isValid || submitting || deleteSubmitting}
-              className="flex-1 rounded bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="flex-1 rounded bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
             >
               {submitting ? '저장 중...' : SAVE_LABEL}
             </button>
@@ -188,7 +188,7 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
               await onDelete();
             }}
             disabled={deleteSubmitting || submitting}
-            className="w-full rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-400/40 dark:text-red-300 dark:hover:bg-red-500/10"
           >
             {deleteSubmitting ? '삭제 중...' : DELETE_LABEL}
           </button>
