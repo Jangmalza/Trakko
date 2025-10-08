@@ -50,7 +50,10 @@ GOOGLE_CLIENT_SECRET="발급받은 Client Secret"
 GOOGLE_CALLBACK_URL="https://api.your-domain/api/auth/google/callback"
 OPENAI_API_KEY="필요 시 OpenAI API Key"
 OPENAI_MODEL="gpt-4o-mini"
+ADMIN_EMAILS="admin@example.com"
 ```
+
+쉼표로 구분하면 여러 관리자 이메일을 등록할 수 있습니다.
 
 ### 5-2. 프로젝트 루트 `.env`
 Prisma CLI와 프론트엔드(Vite) 빌드에서 참조합니다.
@@ -126,3 +129,4 @@ sudo certbot --nginx -d api.your-domain -d your-domain
 - `server/data/portfolio-*.json`은 로컬 테스트 데이터이므로 운영 환경에서는 삭제하거나 권한을 제한하세요.
 - 주기적으로 `npm audit`으로 의존성 취약점을 확인하세요.
 - 데이터베이스 백업 정책(MySQL dump 등)을 마련해 두세요.
+- 공지사항은 `/announcements` 페이지의 관리자 도구에서 등록·수정하며, 관리자 이메일은 `ADMIN_EMAILS` 환경 변수에 쉼표로 나열하세요.

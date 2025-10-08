@@ -6,6 +6,7 @@ import OnboardingSeed from './pages/OnboardingSeed.tsx';
 import PortfolioDashboard from './pages/PortfolioDashboard.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import AuthCallback from './pages/AuthCallback.tsx';
+import AnnouncementsPage from './pages/AnnouncementsPage.tsx';
 import { useAuthBootstrap } from './hooks/useAuthBootstrap.ts';
 import { useThemeStore } from './store/themeStore.ts';
 
@@ -13,6 +14,7 @@ const router = createBrowserRouter([
   { path: '/', element: <OnboardingSeed /> },
   { path: '/dashboard', element: <PortfolioDashboard /> },
   { path: '/settings', element: <SettingsPage /> },
+  { path: '/announcements', element: <AnnouncementsPage /> },
   { path: '/auth/callback', element: <AuthCallback /> },
   { path: '*', element: <Navigate to="/" replace /> }
 ]);

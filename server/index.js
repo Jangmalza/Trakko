@@ -25,6 +25,13 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL ?? `${process.env.API_BASE_URL ?? `http://localhost:${PORT}`}/api/auth/google/callback`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter((email) => email.length > 0);
+const ADMIN_EMAIL_SET = new Set(ADMIN_EMAILS);
+const ANNOUNCEMENT_STATUS_VALUES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+const ANNOUNCEMENT_STATUS_SET = new Set(ANNOUNCEMENT_STATUS_VALUES);
 
 const SUPPORTED_CURRENCIES = new Set(['USD', 'KRW']);
 const BASE_CURRENCY = 'KRW';
@@ -280,22 +287,72 @@ async function ensureUserRecord(sessionUser) {
     throw new Error('Authenticated user required');
   }
 
-  await prisma.user.upsert({
+  const normalizedEmail = typeof sessionUser.email === 'string'
+    ? sessionUser.email.toLowerCase()
+    : null;
+  const shouldGrantAdmin = normalizedEmail && ADMIN_EMAIL_SET.has(normalizedEmail);
+
+  const userRecord = await prisma.user.upsert({
     where: { id: sessionUser.id },
     update: {
       displayName: sessionUser.displayName ?? null,
-      email: sessionUser.email ?? null
+      email: sessionUser.email ?? null,
+      ...(shouldGrantAdmin ? { role: 'ADMIN' } : {})
     },
     create: {
       id: sessionUser.id,
       displayName: sessionUser.displayName ?? null,
       email: sessionUser.email ?? null,
       baseCurrency: BASE_CURRENCY,
+      role: shouldGrantAdmin ? 'ADMIN' : undefined,
       preferences: {
         create: defaultPreferences
       }
     }
   });
+
+  sessionUser.displayName = userRecord.displayName ?? sessionUser.displayName ?? '';
+  sessionUser.email = userRecord.email ?? sessionUser.email;
+  sessionUser.role = userRecord.role;
+
+  return userRecord;
+}
+
+function parseOptionalDate(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isAnnouncementVisible(announcement, referenceDate = new Date()) {
+  if (!announcement) return false;
+  if (announcement.status !== 'PUBLISHED') return false;
+  if (announcement.publishedAt && announcement.publishedAt > referenceDate) return false;
+  if (announcement.expiresAt && announcement.expiresAt <= referenceDate) return false;
+  return true;
+}
+
+function sanitizeAnnouncement(announcement) {
+  return {
+    id: announcement.id,
+    title: announcement.title,
+    content: announcement.content,
+    status: announcement.status,
+    publishedAt: announcement.publishedAt,
+    expiresAt: announcement.expiresAt,
+    createdAt: announcement.createdAt,
+    updatedAt: announcement.updatedAt,
+    author: announcement.author
+      ? {
+          id: announcement.author.id,
+          displayName: announcement.author.displayName ?? '',
+          email: announcement.author.email ?? null
+        }
+      : null
+  };
 }
 
 async function getUserWithRelations(userId) {
@@ -487,6 +544,23 @@ function requireAuth(req, res, next) {
   next();
 }
 
+async function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  try {
+    const userRecord = await ensureUserRecord(req.user);
+    if (userRecord.role !== 'ADMIN') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    next();
+  } catch (error) {
+    console.error('Failed to verify admin privileges', error);
+    res.status(500).json({ message: 'Failed to verify access' });
+  }
+}
+
 app.use(cors({
   origin: CLIENT_BASE_URL,
   credentials: true
@@ -605,8 +679,19 @@ app.get('/api/auth/me', async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
-  await ensureUserRecord(req.user);
-  res.json(req.user);
+
+  try {
+    const userRecord = await ensureUserRecord(req.user);
+    res.json({
+      id: userRecord.id,
+      displayName: userRecord.displayName ?? req.user.displayName ?? '',
+      email: userRecord.email ?? undefined,
+      role: userRecord.role
+    });
+  } catch (error) {
+    console.error('Failed to load authenticated user', error);
+    res.status(500).json({ message: 'Failed to load user profile' });
+  }
 });
 
 app.get('/api/portfolio', requireAuth, async (req, res) => {
@@ -1028,6 +1113,259 @@ app.post('/api/auth/logout', (req, res, next) => {
       res.status(204).send();
     });
   });
+});
+
+app.get('/api/announcements', async (req, res) => {
+  try {
+    let isAdmin = false;
+    const scopeParam = typeof req.query.scope === 'string' ? req.query.scope : undefined;
+
+    if (req.user) {
+      try {
+        const userRecord = await ensureUserRecord(req.user);
+        isAdmin = userRecord.role === 'ADMIN';
+      } catch (ensureError) {
+        console.error('Failed to ensure user record for announcements list', ensureError);
+      }
+    }
+
+    const includeAll = isAdmin && scopeParam === 'all';
+    const now = new Date();
+    const where = includeAll
+      ? {}
+      : {
+          status: 'PUBLISHED',
+          AND: [
+            { OR: [{ publishedAt: null }, { publishedAt: { lte: now } }] },
+            { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }
+          ]
+        };
+
+    const announcements = await prisma.announcement.findMany({
+      where,
+      orderBy: [
+        { publishedAt: 'desc' },
+        { createdAt: 'desc' }
+      ],
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.json(announcements.map(sanitizeAnnouncement));
+  } catch (error) {
+    console.error('Failed to fetch announcements', error);
+    res.status(500).json({ message: 'Failed to fetch announcements' });
+  }
+});
+
+app.get('/api/announcements/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const announcement = await prisma.announcement.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!announcement) {
+      return res.status(404).json({ message: 'Announcement not found' });
+    }
+
+    let isAdmin = false;
+    if (req.user) {
+      try {
+        const userRecord = await ensureUserRecord(req.user);
+        isAdmin = userRecord.role === 'ADMIN';
+      } catch (ensureError) {
+        console.error('Failed to ensure user record for announcement detail', ensureError);
+      }
+    }
+
+    if (!isAdmin && !isAnnouncementVisible(announcement)) {
+      return res.status(404).json({ message: 'Announcement not found' });
+    }
+
+    res.json(sanitizeAnnouncement(announcement));
+  } catch (error) {
+    console.error('Failed to fetch announcement detail', error);
+    res.status(500).json({ message: 'Failed to fetch announcement' });
+  }
+});
+
+app.post('/api/announcements', requireAdmin, async (req, res) => {
+  const { title, content, status = 'DRAFT', publishedAt, expiresAt } = req.body ?? {};
+
+  if (typeof title !== 'string' || title.trim().length === 0) {
+    return res.status(400).json({ message: 'title is required' });
+  }
+
+  if (typeof content !== 'string' || content.trim().length === 0) {
+    return res.status(400).json({ message: 'content is required' });
+  }
+
+  const normalizedStatus = typeof status === 'string' ? status.toUpperCase() : 'DRAFT';
+  if (!ANNOUNCEMENT_STATUS_SET.has(normalizedStatus)) {
+    return res.status(400).json({ message: 'Invalid status value' });
+  }
+
+  const publishedAtValue = parseOptionalDate(publishedAt);
+  if (publishedAt !== undefined && publishedAt !== null && publishedAt !== '' && !publishedAtValue) {
+    return res.status(400).json({ message: 'Invalid publishedAt value' });
+  }
+
+  const expiresAtValue = parseOptionalDate(expiresAt);
+  if (expiresAt !== undefined && expiresAt !== null && expiresAt !== '' && !expiresAtValue) {
+    return res.status(400).json({ message: 'Invalid expiresAt value' });
+  }
+
+  try {
+    const announcement = await prisma.announcement.create({
+      data: {
+        title: title.trim(),
+        content: content.trim(),
+        status: normalizedStatus,
+        publishedAt: publishedAtValue,
+        expiresAt: expiresAtValue,
+        authorId: req.user.id
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json(sanitizeAnnouncement(announcement));
+  } catch (error) {
+    console.error('Failed to create announcement', error);
+    res.status(500).json({ message: 'Failed to create announcement' });
+  }
+});
+
+app.patch('/api/announcements/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { title, content, status, publishedAt, expiresAt } = req.body ?? {};
+
+  try {
+    const existing = await prisma.announcement.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Announcement not found' });
+    }
+
+    const data = {};
+
+    if (title !== undefined) {
+      if (typeof title !== 'string' || title.trim().length === 0) {
+        return res.status(400).json({ message: 'title must be a non-empty string' });
+      }
+      data.title = title.trim();
+    }
+
+    if (content !== undefined) {
+      if (typeof content !== 'string' || content.trim().length === 0) {
+        return res.status(400).json({ message: 'content must be a non-empty string' });
+      }
+      data.content = content.trim();
+    }
+
+    if (status !== undefined) {
+      if (typeof status !== 'string') {
+        return res.status(400).json({ message: 'status must be a string' });
+      }
+      const normalizedStatus = status.toUpperCase();
+      if (!ANNOUNCEMENT_STATUS_SET.has(normalizedStatus)) {
+        return res.status(400).json({ message: 'Invalid status value' });
+      }
+      data.status = normalizedStatus;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'publishedAt')) {
+      const publishedAtValue = parseOptionalDate(publishedAt);
+      if (publishedAt !== undefined && publishedAt !== null && publishedAt !== '' && !publishedAtValue) {
+        return res.status(400).json({ message: 'Invalid publishedAt value' });
+      }
+      data.publishedAt = publishedAtValue;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'expiresAt')) {
+      const expiresAtValue = parseOptionalDate(expiresAt);
+      if (expiresAt !== undefined && expiresAt !== null && expiresAt !== '' && !expiresAtValue) {
+        return res.status(400).json({ message: 'Invalid expiresAt value' });
+      }
+      data.expiresAt = expiresAtValue;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ message: 'No valid fields provided for update' });
+    }
+
+    const updated = await prisma.announcement.update({
+      where: { id },
+      data,
+      include: {
+        author: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.json(sanitizeAnnouncement(updated));
+  } catch (error) {
+    console.error('Failed to update announcement', error);
+    res.status(500).json({ message: 'Failed to update announcement' });
+  }
+});
+
+app.delete('/api/announcements/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await prisma.announcement.delete({
+      where: { id }
+    });
+    res.status(204).send();
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      return res.status(404).json({ message: 'Announcement not found' });
+    }
+    console.error('Failed to delete announcement', error);
+    res.status(500).json({ message: 'Failed to delete announcement' });
+  }
 });
 
 async function start() {

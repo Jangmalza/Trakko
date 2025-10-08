@@ -18,6 +18,8 @@ model User {
   preferences  Preference?
   trades       Trade[]
   goals        PerformanceGoal[]
+  role         UserRole    @default(USER)
+  announcements Announcement[]
 }
 
 model Preference {
@@ -50,4 +52,28 @@ model PerformanceGoal {
   user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, targetYear, targetMonth])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Announcement {
+  id          String             @id @default(cuid())
+  title       String
+  content     String             @db.Text
+  status      AnnouncementStatus @default(DRAFT)
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  authorId    String?
+  author      User?              @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 }
