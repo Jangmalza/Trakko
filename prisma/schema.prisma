@@ -19,6 +19,7 @@ model User {
   trades       Trade[]
   goals        PerformanceGoal[]
   role         UserRole    @default(USER)
+  subscriptionTier SubscriptionTier @default(FREE)
   announcements Announcement[]
 }
 
@@ -57,6 +58,11 @@ model PerformanceGoal {
 enum UserRole {
   USER
   ADMIN
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
 }
 
 enum AnnouncementStatus {

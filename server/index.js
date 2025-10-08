@@ -297,7 +297,7 @@ async function ensureUserRecord(sessionUser) {
     update: {
       displayName: sessionUser.displayName ?? null,
       email: sessionUser.email ?? null,
-      ...(shouldGrantAdmin ? { role: 'ADMIN' } : {})
+      ...(shouldGrantAdmin ? { role: 'ADMIN', subscriptionTier: 'PRO' } : {})
     },
     create: {
       id: sessionUser.id,
@@ -305,6 +305,7 @@ async function ensureUserRecord(sessionUser) {
       email: sessionUser.email ?? null,
       baseCurrency: BASE_CURRENCY,
       role: shouldGrantAdmin ? 'ADMIN' : undefined,
+      subscriptionTier: shouldGrantAdmin ? 'PRO' : undefined,
       preferences: {
         create: defaultPreferences
       }
@@ -314,6 +315,7 @@ async function ensureUserRecord(sessionUser) {
   sessionUser.displayName = userRecord.displayName ?? sessionUser.displayName ?? '';
   sessionUser.email = userRecord.email ?? sessionUser.email;
   sessionUser.role = userRecord.role;
+  sessionUser.subscriptionTier = userRecord.subscriptionTier;
 
   return userRecord;
 }
@@ -686,7 +688,8 @@ app.get('/api/auth/me', async (req, res) => {
       id: userRecord.id,
       displayName: userRecord.displayName ?? req.user.displayName ?? '',
       email: userRecord.email ?? undefined,
-      role: userRecord.role
+      role: userRecord.role,
+      subscriptionTier: userRecord.subscriptionTier
     });
   } catch (error) {
     console.error('Failed to load authenticated user', error);

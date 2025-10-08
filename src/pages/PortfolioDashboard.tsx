@@ -45,7 +45,7 @@ const PortfolioDashboard: React.FC = () => {
     goalLoading: state.goalLoading
   })));
   const { user } = useAuthStore();
-  const isAdFreeUser = useMemo(() => user?.role === 'ADMIN', [user]);
+  const isAdFreeUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
   const [tradeSavedPromoVisible, setTradeSavedPromoVisible] = useState(false);
 
   useEffect(() => {
