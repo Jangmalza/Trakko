@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ResetPortfolioSection from '../components/ResetPortfolioSection';
 import HeaderNavigation from '../components/HeaderNavigation';
 import ConfirmResetModal from '../components/modals/ConfirmResetModal';
+import ThemeToggleButton from '../components/ThemeToggleButton';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useAuthStore } from '../store/authStore';
 import { usePreferencesStore } from '../store/preferencesStore';
@@ -311,6 +312,8 @@ const SettingsPage: React.FC = () => {
         </div>
       </div>
 
+      <ThemeToggleButton />
+
       <ConfirmResetModal
         open={modalOpen && !!user}
         onCancel={() => {
@@ -323,6 +326,7 @@ const SettingsPage: React.FC = () => {
         submitting={submitting}
         errorMessage={submitError}
       />
+    <ThemeToggleButton />
     </div>
   );
 };

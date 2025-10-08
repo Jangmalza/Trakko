@@ -5,6 +5,7 @@ import SeedOverviewChart from '../components/SeedOverviewChart';
 import TradeEntriesList from '../components/TradeEntriesList';
 import HeaderNavigation from '../components/HeaderNavigation';
 import ChatAssistantPanel from '../components/ChatAssistantPanel';
+import ThemeToggleButton from '../components/ThemeToggleButton';
 import GoalProgressCard from '../components/GoalProgressCard';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -95,6 +96,7 @@ const PortfolioDashboard: React.FC = () => {
           </main>
         )}
       </div>
+      <ThemeToggleButton />
       <button
         type="button"
         disabled={showPlaceholder}

@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import TrakkoAuthHero from '../components/TrakkoAuthHero';
 import { usePreferencesStore } from '../store/preferencesStore';
 import type { SupportedCurrency } from '../types/preferences';
+import ThemeToggleButton from '../components/ThemeToggleButton';
 
 const currencyOptions: Array<{ value: SupportedCurrency; label: string; description: string }> = [
   {
@@ -116,6 +117,7 @@ const OnboardingSeed: React.FC = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-600 dark:bg-slate-950 dark:text-slate-300">
         로그인 상태를 확인하는 중입니다...
+        <ThemeToggleButton />
       </div>
     );
   }
@@ -138,6 +140,7 @@ const OnboardingSeed: React.FC = () => {
             </p>
           </div>
         </div>
+        <ThemeToggleButton />
       </div>
     );
   }
@@ -232,6 +235,7 @@ const OnboardingSeed: React.FC = () => {
           </button>
         </form>
       </div>
+    <ThemeToggleButton />
     </div>
   );
 };
