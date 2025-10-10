@@ -28,7 +28,6 @@ const HeaderNavigation: React.FC = () => {
             alt="Trakko 로고"
             className="h-8 w-8 rounded-full object-cover"
           />
-          <span>TRAKKO</span>
         </Link>
         <div className="flex items-center gap-4 text-sm">
           <Link to="/dashboard" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">

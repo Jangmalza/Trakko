@@ -1,3 +1,5 @@
+import type { TraderType } from '../data/portfolioTypes';
+
 export type AuthUserRole = 'USER' | 'ADMIN';
 export type AuthUserSubscription = 'FREE' | 'PRO';
 
@@ -7,6 +9,7 @@ export interface AuthUser {
   email?: string;
   role: AuthUserRole;
   subscriptionTier: AuthUserSubscription;
+  traderType: TraderType;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api';

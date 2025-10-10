@@ -22,7 +22,7 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
     return Number.isFinite(value) ? value : NaN;
   }, [profitLoss]);
 
-  const MAX_PROFIT_LOSS = 999_999_999_999_999.99;
+  const MAX_PROFIT_LOSS = Number('999999999999999.99');
   const isValid =
     ticker.trim() !== '' &&
     !Number.isNaN(parsedProfitLoss) &&

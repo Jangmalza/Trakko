@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import TrakkoAuthHero from '../components/TrakkoAuthHero';
 import { usePreferencesStore } from '../store/preferencesStore';
 import type { SupportedCurrency } from '../types/preferences';
+import type { TraderType } from '../data/portfolioTypes';
 import ThemeToggleButton from '../components/ThemeToggleButton';
 
 const currencyOptions: Array<{ value: SupportedCurrency; label: string; description: string }> = [
@@ -18,6 +19,24 @@ const currencyOptions: Array<{ value: SupportedCurrency; label: string; descript
     value: 'USD',
     label: '미국 달러 (USD)',
     description: '달러 기준으로 표시하며 소수점 둘째 자리까지 표시합니다.'
+  }
+];
+
+const traderTypeOptions: Array<{ value: TraderType; label: string; description: string }> = [
+  {
+    value: 'CRYPTO',
+    label: '암호화폐 거래자',
+    description: '디지털 자산 및 코인 기반 거래를 주로 합니다.'
+  },
+  {
+    value: 'US_STOCK',
+    label: '미국주식 거래자',
+    description: '미국 증시에 상장된 종목을 중심으로 투자합니다.'
+  },
+  {
+    value: 'KR_STOCK',
+    label: '한국주식 거래자',
+    description: '국내 코스피/코스닥 종목 위주로 거래합니다.'
   }
 ];
 
@@ -46,7 +65,9 @@ const OnboardingSeed: React.FC = () => {
   const loadPreferences = usePreferencesStore((state) => state.loadPreferences);
   const preferencesRequestedRef = useRef(false);
   const portfolioLoadRequestedRef = useRef(false);
+  const portfolioTraderType = usePortfolioStore((state) => state.traderType);
   const [seedInput, setSeedInput] = useState('');
+  const [traderType, setTraderType] = useState<TraderType>('KR_STOCK');
   const [touched, setTouched] = useState(false);
   
   useEffect(() => {
@@ -83,6 +104,12 @@ const OnboardingSeed: React.FC = () => {
     }
   }, [initialSeed]);
 
+  useEffect(() => {
+    if (portfolioTraderType) {
+      setTraderType(portfolioTraderType);
+    }
+  }, [portfolioTraderType]);
+
   const parsedSeed = Number(seedInput.replace(/,/g, ''));
   const isValid = !Number.isNaN(parsedSeed) && parsedSeed > 0;
 
@@ -92,7 +119,7 @@ const OnboardingSeed: React.FC = () => {
     if (!isValid) return;
 
     try {
-      await setInitialSeed(parsedSeed);
+      await setInitialSeed(parsedSeed, traderType);
       navigate('/dashboard', { replace: true });
     } catch {
       // already handled by store
@@ -157,6 +184,39 @@ const OnboardingSeed: React.FC = () => {
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <section className="space-y-3">
+            <header className="text-left">
+              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">거래 유형</p>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">어떤 자산을 주로 거래하나요?</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                주요 거래 대상을 선택하면 나중에 맞춤형 인사이트를 제공하는 데 도움이 됩니다.
+              </p>
+            </header>
+
+            <div className="space-y-2">
+              {traderTypeOptions.map((option) => {
+                const selected = option.value === traderType;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setTraderType(option.value)}
+                    className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                      selected
+                        ? 'border-slate-900 bg-slate-900/5 text-slate-900 dark:border-slate-500 dark:bg-slate-800/60 dark:text-slate-100'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span>{option.label}</span>
+                      <span className={`h-2 w-2 rounded-full ${selected ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{option.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
           <section className="space-y-3">
             <header className="text-left">
               <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">표시 통화</p>

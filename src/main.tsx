@@ -19,7 +19,7 @@ const router = createBrowserRouter([
   { path: '*', element: <Navigate to="/" replace /> }
 ]);
 
-const AppRoot = () => {
+export const AppRoot = () => {
   useAuthBootstrap();
   useThemeStore((state) => state.theme);
   return <RouterProvider router={router} />;

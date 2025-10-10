@@ -1,4 +1,4 @@
-﻿import type { NewTradeEntry, PortfolioSnapshot, TradeEntry } from '../data/portfolioTypes';
+﻿import type { NewTradeEntry, PortfolioSnapshot, TradeEntry, TraderType } from '../data/portfolioTypes';
 import type { SupportedCurrency } from '../types/preferences';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api';
@@ -43,11 +43,11 @@ export async function fetchPortfolio(): Promise<PortfolioSnapshot> {
   return handleResponse<PortfolioSnapshot>(response);
 }
 
-export async function upsertInitialSeed(initialSeed: number, currency: SupportedCurrency): Promise<PortfolioSnapshot> {
+export async function upsertInitialSeed(initialSeed: number, currency: SupportedCurrency, traderType: TraderType): Promise<PortfolioSnapshot> {
   const response = await fetch(`${API_BASE_URL}/portfolio/seed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ initialSeed, currency }),
+    body: JSON.stringify({ initialSeed, currency, traderType }),
     credentials: 'include'
   });
 

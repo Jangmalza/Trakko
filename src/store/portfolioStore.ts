@@ -1,5 +1,5 @@
 ﻿import { create } from 'zustand';
-import type { NewTradeEntry, TradeEntry, PerformanceGoalSummary, UpsertGoalPayload } from '../data/portfolioTypes';
+import type { NewTradeEntry, TradeEntry, PerformanceGoalSummary, UpsertGoalPayload, TraderType } from '../data/portfolioTypes';
 import { createTradeEntry, fetchPortfolio, resetPortfolio, upsertInitialSeed, updateTradeEntry, deleteTradeEntry } from '../api/portfolioApi';
 import { fetchCurrentGoal, upsertCurrentGoal, deleteCurrentGoal } from '../api/goalsApi';
 import { usePreferencesStore } from './preferencesStore';
@@ -17,9 +17,10 @@ interface PortfolioState {
   hasLoaded: boolean;
   goalLoading: boolean;
   goalError: string | null;
+  traderType: TraderType;
 
   loadPortfolio: () => Promise<void>;
-  setInitialSeed: (seed: number) => Promise<void>;
+  setInitialSeed: (seed: number, traderType: TraderType) => Promise<void>;
   addTrade: (payload: NewTradeEntry) => Promise<void>;
   updateTrade: (tradeId: string, payload: NewTradeEntry) => Promise<void>;
   deleteTrade: (tradeId: string) => Promise<void>;
@@ -45,6 +46,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
   hasLoaded: false,
   goalLoading: false,
   goalError: null,
+  traderType: 'KR_STOCK',
 
   loadPortfolio: async () => {
     set({ loading: true, error: null });
@@ -59,7 +61,8 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
         performanceGoal: snapshot.performanceGoal ?? null,
         loading: false,
         hasLoaded: true,
-        error: null
+        error: null,
+        traderType: snapshot.traderType
       });
     } catch (error) {
       console.error('Failed to load portfolio', error);
@@ -71,11 +74,11 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
     }
   },
 
-  setInitialSeed: async (seed: number) => {
+  setInitialSeed: async (seed: number, traderType: TraderType) => {
     set({ loading: true, error: null });
     try {
       const currency = usePreferencesStore.getState().currency;
-      const snapshot = await upsertInitialSeed(seed, currency);
+      const snapshot = await upsertInitialSeed(seed, currency, traderType);
       set({
         initialSeed: snapshot.initialSeed,
         trades: snapshot.trades,
@@ -85,7 +88,8 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
         performanceGoal: snapshot.performanceGoal ?? null,
         loading: false,
         hasLoaded: true,
-        error: null
+        error: null,
+        traderType: snapshot.traderType
       });
     } catch (error) {
       console.error('Failed to set initial seed', error);
@@ -172,7 +176,8 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
         performanceGoal: snapshot.performanceGoal ?? null,
         loading: false,
         hasLoaded: true,
-        error: null
+        error: null,
+        traderType: snapshot.traderType
       });
     } catch (error) {
       console.error('Failed to reset portfolio', error);
@@ -237,7 +242,8 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
       error: null,
       hasLoaded: false,
       goalLoading: false,
-      goalError: null
+      goalError: null,
+      traderType: 'KR_STOCK'
     });
   },
 

@@ -1,4 +1,6 @@
-﻿import type { SupportedCurrency } from '../types/preferences';
+import type { SupportedCurrency } from '../types/preferences';
+
+export type TraderType = 'CRYPTO' | 'US_STOCK' | 'KR_STOCK';
 
 export interface TradeEntry {
   id: string;
@@ -24,6 +26,7 @@ export interface PortfolioSnapshot {
   displayCurrency: SupportedCurrency;
   exchangeRate?: number;
   performanceGoal: PerformanceGoalSummary;
+  traderType: TraderType;
 }
 
 export interface PerformanceGoalSummary {

@@ -34,6 +34,7 @@ const ANNOUNCEMENT_STATUS_VALUES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 const ANNOUNCEMENT_STATUS_SET = new Set(ANNOUNCEMENT_STATUS_VALUES);
 
 const SUPPORTED_CURRENCIES = new Set(['USD', 'KRW']);
+const TRADER_TYPE_VALUES = ['CRYPTO', 'US_STOCK', 'KR_STOCK'];
 const BASE_CURRENCY = 'KRW';
 const currencyLocales = {
   USD: 'en-US',
@@ -282,6 +283,12 @@ function normalizeCurrency(value) {
   return SUPPORTED_CURRENCIES.has(upper) ? upper : defaultPreferences.currency;
 }
 
+function normalizeTraderType(value) {
+  if (typeof value !== 'string') return 'KR_STOCK';
+  const upper = value.toUpperCase().replace(/-/g, '_');
+  return TRADER_TYPE_VALUES.includes(upper) ? upper : 'KR_STOCK';
+}
+
 async function ensureUserRecord(sessionUser) {
   if (!sessionUser) {
     throw new Error('Authenticated user required');
@@ -304,6 +311,7 @@ async function ensureUserRecord(sessionUser) {
       displayName: sessionUser.displayName ?? null,
       email: sessionUser.email ?? null,
       baseCurrency: BASE_CURRENCY,
+      traderType: 'KR_STOCK',
       role: shouldGrantAdmin ? 'ADMIN' : undefined,
       subscriptionTier: shouldGrantAdmin ? 'PRO' : undefined,
       preferences: {
@@ -316,6 +324,7 @@ async function ensureUserRecord(sessionUser) {
   sessionUser.email = userRecord.email ?? sessionUser.email;
   sessionUser.role = userRecord.role;
   sessionUser.subscriptionTier = userRecord.subscriptionTier;
+  sessionUser.traderType = userRecord.traderType;
 
   return userRecord;
 }
@@ -438,7 +447,8 @@ async function getPortfolioResponse(userId) {
     baseCurrency,
     displayCurrency,
     exchangeRate,
-    performanceGoal
+    performanceGoal,
+    traderType: normalizeTraderType(user.traderType ?? 'KR_STOCK')
   };
 }
 
@@ -689,7 +699,8 @@ app.get('/api/auth/me', async (req, res) => {
       displayName: userRecord.displayName ?? req.user.displayName ?? '',
       email: userRecord.email ?? undefined,
       role: userRecord.role,
-      subscriptionTier: userRecord.subscriptionTier
+      subscriptionTier: userRecord.subscriptionTier,
+      traderType: normalizeTraderType(userRecord.traderType ?? 'KR_STOCK')
     });
   } catch (error) {
     console.error('Failed to load authenticated user', error);
@@ -711,14 +722,14 @@ app.get('/api/portfolio', requireAuth, async (req, res) => {
 
 app.post('/api/portfolio/seed', requireAuth, async (req, res) => {
   try {
-    const { initialSeed, currency } = req.body ?? {};
+    const { initialSeed, currency, traderType } = req.body ?? {};
     const seedValue = Number(initialSeed);
 
     if (!Number.isFinite(seedValue) || seedValue <= 0) {
       return res.status(400).json({ message: 'initialSeed must be a positive number' });
     }
 
-    const MAX_SEED = 999_999_999_999_999.99;
+    const MAX_SEED = Number('999999999999999.99');
     if (seedValue > MAX_SEED) {
       return res.status(400).json({ message: '초기 자본은 최대 999,999,999,999,999.99까지 입력할 수 있습니다.' });
     }
@@ -734,12 +745,18 @@ app.post('/api/portfolio/seed', requireAuth, async (req, res) => {
       return res.status(400).json({ message: '초기 자본은 최대 999,999,999,999,999.99까지 입력할 수 있습니다.' });
     }
 
+    const currentTraderType = normalizeTraderType(user.traderType ?? 'KR_STOCK');
+    const normalizedTraderType = traderType !== undefined
+      ? normalizeTraderType(traderType)
+      : currentTraderType;
+
     try {
       await prisma.user.update({
         where: { id: sessionUser.id },
         data: {
           initialSeed: new Prisma.Decimal(seedValueInBase.toFixed(2)),
-          baseCurrency
+          baseCurrency,
+          traderType: normalizedTraderType
         }
       });
     } catch (updateError) {
@@ -792,7 +809,7 @@ app.post('/api/portfolio/trades', requireAuth, async (req, res) => {
     const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
     const sourceCurrency = normalizeCurrency(currency ?? displayCurrency);
     const profitLossInBase = await convertAmount(profitLossValue, sourceCurrency, baseCurrency);
-    const MAX_PROFIT_LOSS = 999_999_999_999_999.99;
+    const MAX_PROFIT_LOSS = Number('999999999999999.99');
     if (profitLossInBase > MAX_PROFIT_LOSS || profitLossInBase < -MAX_PROFIT_LOSS) {
       return res.status(400).json({ message: '손익 금액은 ±999,999,999,999,999.99 범위 내에서 입력할 수 있습니다.' });
     }
@@ -852,7 +869,7 @@ app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
     const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
     const sourceCurrency = normalizeCurrency(currency ?? displayCurrency);
     const profitLossInBase = await convertAmount(profitLossValue, sourceCurrency, baseCurrency);
-    const MAX_PROFIT_LOSS = 999_999_999_999_999.99;
+    const MAX_PROFIT_LOSS = Number('999999999999999.99');
     if (profitLossInBase > MAX_PROFIT_LOSS || profitLossInBase < -MAX_PROFIT_LOSS) {
       return res.status(400).json({ message: '손익 금액은 ±999,999,999,999,999.99 범위 내에서 입력할 수 있습니다.' });
     }
