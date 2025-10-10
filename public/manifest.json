@@ -1,7 +1,7 @@
 {
-  "name": "Investment Journal",
-  "short_name": "Journal",
-  "description": "Track starting capital, trades, and performance in one place.",
+  "name": "Trakko",
+  "short_name": "Trakko",
+  "description": "시작 자본과 거래를 기록하고 성과를 추적하세요.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
@@ -9,9 +9,9 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/vite.svg",
-      "sizes": "32x32",
-      "type": "image/svg+xml",
+      "src": "/Trakko.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
@@ -21,9 +21,9 @@
   "scope": "/",
   "screenshots": [
     {
-      "src": "/vite.svg",
+      "src": "/Trakko.png",
       "sizes": "1280x720",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "form_factor": "wide"
     }
   ]

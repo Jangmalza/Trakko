@@ -10,6 +10,8 @@ type MarketMetric = {
 
 const BASE_MARKETS: MarketMetric[] = [
   { id: 'btc', label: '비트코인 (BTC)', value: 98000000, unit: 'KRW', change: 1.2 },
+  { id: 'gold', label: '금 현물 (XAU)', value: 2375.8, unit: 'USD', change: 0.45 },
+  { id: 'oil', label: 'WTI 유가', value: 78.2, unit: 'USD', change: -0.35 },
   { id: 'nasdaq', label: '나스닥 지수', value: 17950.23, change: -0.6 },
   { id: 'usdkrw', label: 'USD/KRW 환율', value: 1356.4, change: 0.3 }
 ];
@@ -34,7 +36,18 @@ const MiniMarketTicker: React.FC = () => {
     const intervalId = window.setInterval(() => {
       setMarkets((current) =>
         current.map((market) => {
-          const noise = (Math.random() - 0.5) * (market.id === 'btc' ? 200000 : 10);
+          const noiseBase = (() => {
+            switch (market.id) {
+              case 'btc':
+                return 200000;
+              case 'gold':
+              case 'oil':
+                return 1.5;
+              default:
+                return 10;
+            }
+          })();
+          const noise = (Math.random() - 0.5) * noiseBase;
           const nextValue = Math.max(market.value + noise, 0);
           const nextChange = ((nextValue - market.value) / Math.max(market.value, 1)) * 100;
 

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { NewTradeEntry } from '../data/portfolioTypes';
 import { usePreferencesStore } from '../store/preferencesStore';
+import InlineDatePicker from './InlineDatePicker';
 
 interface TradeEntryFormProps {
   onSubmit: (entry: NewTradeEntry) => Promise<void>;
@@ -21,11 +22,20 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
     return Number.isFinite(value) ? value : NaN;
   }, [profitLoss]);
 
-  const isValid = ticker.trim() !== '' && !Number.isNaN(parsedProfitLoss) && tradeDate !== '';
+  const MAX_PROFIT_LOSS = 999_999_999_999_999.99;
+  const isValid =
+    ticker.trim() !== '' &&
+    !Number.isNaN(parsedProfitLoss) &&
+    Math.abs(parsedProfitLoss) <= MAX_PROFIT_LOSS &&
+    tradeDate !== '';
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!isValid) {
+      if (parsedProfitLoss > MAX_PROFIT_LOSS || parsedProfitLoss < -MAX_PROFIT_LOSS) {
+        setLocalError('손익 금액은 ±999,999,999,999,999.99 범위 내에서 입력해주세요.');
+        return;
+      }
       setLocalError('티커, 손익, 날짜를 모두 입력해주세요.');
       return;
     }
@@ -44,14 +54,17 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded border border-slate-200 bg-white p-6 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-800 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+    >
       <div>
         <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">거래 기록</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">손익과 근거를 간단히 남겨 두세요.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-2">
+      <div className="grid gap-6 sm:grid-cols-2">
+        <label className="space-y-3">
           <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">티커</span>
           <input
             type="text"
@@ -61,7 +74,7 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 transition focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
           />
         </label>
-        <label className="space-y-2">
+        <label className="space-y-3">
           <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">손익 ({currency})</span>
           <input
             type="text"
@@ -73,17 +86,15 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
         </label>
       </div>
 
-      <label className="space-y-2">
+      <div className="space-y-4 pb-2">
         <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">거래일</span>
-        <input
-          type="date"
-          value={tradeDate}
-          onChange={(event) => setTradeDate(event.target.value)}
-          className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 transition focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
-        />
-      </label>
+        <div className="mt-2">
+          <InlineDatePicker value={tradeDate} onChange={setTradeDate} />
+        </div>
+        <input type="hidden" name="tradeDate" value={tradeDate} />
+      </div>
 
-      <label className="space-y-2">
+      <label className="space-y-3 pt-2">
         <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">매매 근거</span>
         <textarea
           value={rationale}

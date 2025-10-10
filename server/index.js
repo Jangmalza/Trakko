@@ -718,6 +718,11 @@ app.post('/api/portfolio/seed', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'initialSeed must be a positive number' });
     }
 
+    const MAX_SEED = 999_999_999_999_999.99;
+    if (seedValue > MAX_SEED) {
+      return res.status(400).json({ message: '초기 자본은 최대 999,999,999,999,999.99까지 입력할 수 있습니다.' });
+    }
+
     const sessionUser = req.user;
     await ensureUserRecord(sessionUser);
     const user = await getUserWithRelations(sessionUser.id);
@@ -725,13 +730,24 @@ app.post('/api/portfolio/seed', requireAuth, async (req, res) => {
     const sourceCurrency = normalizeCurrency(currency ?? user.preferences.currency ?? baseCurrency);
     const seedValueInBase = await convertAmount(seedValue, sourceCurrency, baseCurrency);
 
-    await prisma.user.update({
-      where: { id: sessionUser.id },
-      data: {
-        initialSeed: new Prisma.Decimal(seedValueInBase.toFixed(2)),
-        baseCurrency
+    if (seedValueInBase > MAX_SEED) {
+      return res.status(400).json({ message: '초기 자본은 최대 999,999,999,999,999.99까지 입력할 수 있습니다.' });
+    }
+
+    try {
+      await prisma.user.update({
+        where: { id: sessionUser.id },
+        data: {
+          initialSeed: new Prisma.Decimal(seedValueInBase.toFixed(2)),
+          baseCurrency
+        }
+      });
+    } catch (updateError) {
+      if (updateError instanceof Prisma.PrismaClientKnownRequestError && updateError.code === 'P2020') {
+        return res.status(400).json({ message: '초기 자본은 최대 999,999,999,999,999.99까지 입력할 수 있습니다.' });
       }
-    });
+      throw updateError;
+    }
 
     const snapshot = await getPortfolioResponse(sessionUser.id);
     res.json(snapshot);
@@ -776,6 +792,10 @@ app.post('/api/portfolio/trades', requireAuth, async (req, res) => {
     const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
     const sourceCurrency = normalizeCurrency(currency ?? displayCurrency);
     const profitLossInBase = await convertAmount(profitLossValue, sourceCurrency, baseCurrency);
+    const MAX_PROFIT_LOSS = 999_999_999_999_999.99;
+    if (profitLossInBase > MAX_PROFIT_LOSS || profitLossInBase < -MAX_PROFIT_LOSS) {
+      return res.status(400).json({ message: '손익 금액은 ±999,999,999,999,999.99 범위 내에서 입력할 수 있습니다.' });
+    }
 
     const createdTrade = await prisma.trade.create({
       data: {
@@ -832,6 +852,10 @@ app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
     const displayCurrency = normalizeCurrency(user.preferences?.currency ?? baseCurrency);
     const sourceCurrency = normalizeCurrency(currency ?? displayCurrency);
     const profitLossInBase = await convertAmount(profitLossValue, sourceCurrency, baseCurrency);
+    const MAX_PROFIT_LOSS = 999_999_999_999_999.99;
+    if (profitLossInBase > MAX_PROFIT_LOSS || profitLossInBase < -MAX_PROFIT_LOSS) {
+      return res.status(400).json({ message: '손익 금액은 ±999,999,999,999,999.99 범위 내에서 입력할 수 있습니다.' });
+    }
 
     const updatedTrade = await prisma.trade.update({
       where: { id: tradeId },
@@ -1074,10 +1098,9 @@ app.post('/api/chat/assistant', requireAuth, async (req, res) => {
 
     const systemPrompt = [
       'You are Trakko, an investment journal assistant that offers actionable trading insights.',
-      'Respond in Korean using short sections with brief headings or bold labels when helpful.',
-      'Prefer bullet lists for recommendations or checklists and keep each bullet under two sentences.',
-      'Leave blank lines between sections to improve readability.',
-      'Highlight risk management tips, pattern recognition, and next-step suggestions when appropriate.',
+      'Respond in Korean using concise sentences without Markdown syntax, bullets, or bold styling.',
+      'Clearly separate sections with short headings such as "[요약]" or "[다음 조치]".',
+      'Highlight risk management tips, pattern recognition, and next-step suggestions with plain sentences.',
       'If information is missing, acknowledge it and guide the user on how to collect it.'
     ].join(' ');
 

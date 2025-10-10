@@ -117,19 +117,19 @@ const PortfolioDashboard: React.FC = () => {
             <TradeEntryForm onSubmit={handleAddTrade} loading={loading} />
             <div className="space-y-8">
               {tradeSavedPromoVisible && (
-                <section className="rounded-xl border border-amber-200 bg-amber-50 px-6 py-5 text-sm text-amber-900 shadow-sm dark:border-amber-400/50 dark:bg-amber-500/10 dark:text-amber-200">
+                <section className="rounded-xl border border-amber-200 bg-amber-100 px-6 py-5 text-sm text-amber-900 shadow-sm dark:border-amber-400/50 dark:bg-amber-500/20 dark:text-amber-200">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="font-semibold text-amber-900 dark:text-amber-200">Trade saved successfully!</div>
-                    <span className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">Sponsored</span>
+                    <div className="font-semibold text-amber-900 dark:text-amber-200">거래가 성공적으로 저장되었습니다!</div>
+                    <span className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">스폰서</span>
                   </div>
                   <p className="mt-3 leading-6 text-amber-800 dark:text-amber-200/90">
-                    Start a free preview of the Trakko macro insights pack and prepare your next move with daily briefings.
+                    Trakko 매크로 인사이트 팩을 무료로 체험하고 일간 브리핑으로 다음 전략을 준비하세요.
                   </p>
                   <button
                     type="button"
                     className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 dark:bg-amber-300 dark:text-amber-900 dark:hover:bg-amber-200"
                   >
-                    Start 7-day trial
+                    7일 체험 시작하기
                   </button>
                 </section>
               )}
@@ -137,42 +137,6 @@ const PortfolioDashboard: React.FC = () => {
                 <GoalProgressCard summary={performanceGoal} loading={goalLoading} />
               )}
               <SeedOverviewChart initialSeed={initialSeed} trades={trades} />
-              {!isAdFreeUser && (
-                <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Trakko recommended resources</h2>
-                    <span className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Sponsored</span>
-                  </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <article className="flex flex-col gap-2 rounded-lg border border-slate-200 px-4 py-3 transition hover:border-slate-300 dark:border-slate-700 dark:hover-border-slate-600">
-                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">AI briefings</p>
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Real-time news digest alerts</h3>
-                      <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                        Get market headlines every five minutes with concise takeaways tailored to active traders.
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-2 inline-flex w-max items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-                      >
-                        View details
-                      </button>
-                    </article>
-                    <article className="flex flex-col gap-2 rounded-lg border border-slate-200 px-4 py-3 transition hover:border-slate-300 dark:border-slate-700 dark:hover-border-slate-600">
-                      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Premium course</p>
-                      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Portfolio risk masterclass</h3>
-                      <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                        Learn step-by-step risk control frameworks used by professionals and apply them with ready templates.
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-2 inline-flex w-max items-center gap-2 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-600 dark:text-slate-300 dark:hover-border-slate-500 dark:hover:text-slate-100"
-                      >
-                        Enrol now
-                      </button>
-                    </article>
-                  </div>
-                </section>
-              )}
               <TradeEntriesList initialSeed={initialSeed} trades={trades} />
             </div>
           </main>

@@ -19,8 +19,16 @@ const HeaderNavigation: React.FC = () => {
   return (
     <div className="flex flex-col">
       <nav className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
-        <Link to="/dashboard" className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-          TRAKKO
+        <Link
+          to="/dashboard"
+          className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100"
+        >
+          <img
+            src="/Trakko.png"
+            alt="Trakko 로고"
+            className="h-8 w-8 rounded-full object-cover"
+          />
+          <span>TRAKKO</span>
         </Link>
         <div className="flex items-center gap-4 text-sm">
           <Link to="/dashboard" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
