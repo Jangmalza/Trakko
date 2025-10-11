@@ -10,6 +10,9 @@ import GoalProgressCard from '../components/GoalProgressCard';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useAuthStore } from '../store/authStore';
 import { useShallow } from 'zustand/react/shallow';
+import CryptoHighlights from '../components/traderHighlights/CryptoHighlights';
+import UsStockHighlights from '../components/traderHighlights/UsStockHighlights';
+import KrStockHighlights from '../components/traderHighlights/KrStockHighlights';
 
 const DASHBOARD_TITLE = '일일 자본 트래커';
 const DASHBOARD_SUBTITLE = '각 거래가 전체 자본에 미치는 영향을 기록하고, 결정의 근거를 남겨 다음 전략에 반영하세요.';
@@ -31,7 +34,8 @@ const PortfolioDashboard: React.FC = () => {
     clearError,
     hasLoaded,
     performanceGoal,
-    goalLoading
+    goalLoading,
+    traderType
   } = usePortfolioStore(useShallow((state) => ({
     initialSeed: state.initialSeed,
     trades: state.trades,
@@ -42,8 +46,9 @@ const PortfolioDashboard: React.FC = () => {
     clearError: state.clearError,
     hasLoaded: state.hasLoaded,
     performanceGoal: state.performanceGoal,
-    goalLoading: state.goalLoading
-  })));
+    goalLoading: state.goalLoading,
+    traderType: state.traderType
+  }))); 
   const { user } = useAuthStore();
   const isAdFreeUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
   const [tradeSavedPromoVisible, setTradeSavedPromoVisible] = useState(false);
@@ -94,6 +99,18 @@ const PortfolioDashboard: React.FC = () => {
 
   const showPlaceholder = !hasLoaded || initialSeed === null;
 
+  const renderTraderHighlights = () => {
+    switch (traderType) {
+      case 'CRYPTO':
+        return <CryptoHighlights />;
+      case 'US_STOCK':
+        return <UsStockHighlights />;
+      case 'KR_STOCK':
+      default:
+        return <KrStockHighlights />;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <HeaderNavigation />
@@ -137,6 +154,7 @@ const PortfolioDashboard: React.FC = () => {
                 <GoalProgressCard summary={performanceGoal} loading={goalLoading} />
               )}
               <SeedOverviewChart initialSeed={initialSeed} trades={trades} />
+              {renderTraderHighlights()}
               {!isAdFreeUser && (
                 <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

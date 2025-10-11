@@ -13,8 +13,6 @@ interface TradeEntriesListProps {
 const INITIAL_SEED_LABEL = '초기 자본';
 const TOTAL_PNL_LABEL = '누적 손익';
 const CURRENT_CAPITAL_LABEL = '현재 자본';
-const LIST_TITLE = '최근 거래 기록';
-const LIST_SUBTITLE = '기록을 되돌아보며 패턴을 발견해보세요.';
 const EMPTY_MESSAGE = '아직 등록된 거래가 없습니다.';
 const PROFIT_LABEL = '손익';
 const LOGGED_LABEL = '기록 시각';
@@ -40,6 +38,7 @@ const VIEW_MODE_OPTIONS: Array<{ value: ViewMode; label: string }> = [
 
 const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades }) => {
   const currency = usePreferencesStore((state) => state.currency);
+  const traderType = usePortfolioStore((state) => state.traderType);
   const updateTrade = usePortfolioStore((state) => state.updateTrade);
   const deleteTrade = usePortfolioStore((state) => state.deleteTrade);
 
@@ -261,8 +260,20 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
 
       <div className="rounded border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{LIST_TITLE}</h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{LIST_SUBTITLE}</p>
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {traderType === 'CRYPTO'
+              ? '최근 암호화폐 거래 기록'
+              : traderType === 'US_STOCK'
+                ? '최근 미국주식 거래 기록'
+                : '최근 국내주식 거래 기록'}
+          </h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {traderType === 'CRYPTO'
+              ? '변동성이 큰 코인 포지션을 다시 점검하세요.'
+              : traderType === 'US_STOCK'
+                ? '실적/경제 일정과 함께 손익 흐름을 확인하세요.'
+                : '환율과 수급 변화 속에서 패턴을 찾아보세요.'}
+          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {VIEW_MODE_OPTIONS.map((option) => {
               const active = viewMode === option.value;
