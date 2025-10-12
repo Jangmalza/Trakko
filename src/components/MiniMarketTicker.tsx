@@ -11,12 +11,12 @@ type MarketMetric = {
 };
 
 const BASE_MARKETS: MarketMetric[] = [
-  { id: 'btc', label: '비트코인 (BTC)', value: 73000, unit: 'USD', change: 1.2 },
-  { id: 'eth', label: '이더리움 (ETH)', value: 3800, unit: 'USD', change: 0.95 },
-  { id: 'sp500', label: 'S&P 500', value: 5250.4, unit: undefined, change: 0.45 },
-  { id: 'nasdaq', label: '나스닥 지수', value: 17950.23, unit: undefined, change: -0.6 },
-  { id: 'vix', label: 'VIX 지수', value: 16.8, unit: undefined, change: 0.6 },
-  { id: 'dji', label: '다우존스', value: 38000.12, unit: undefined, change: 0.22 }
+  { id: 'btc', label: '비트코인 (BTC)', value: NaN, unit: 'USD', change: NaN },
+  { id: 'eth', label: '이더리움 (ETH)', value: NaN, unit: 'USD', change: NaN },
+  { id: 'sp500', label: 'S&P 500', value: NaN, unit: undefined, change: NaN },
+  { id: 'nasdaq', label: '나스닥 지수', value: NaN, unit: undefined, change: NaN },
+  { id: 'vix', label: 'VIX 지수', value: NaN, unit: undefined, change: NaN },
+  { id: 'dji', label: '다우존스', value: NaN, unit: undefined, change: NaN }
 ];
 
 const formatValue = (market: MarketMetric): string => {

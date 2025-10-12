@@ -48,8 +48,8 @@ const defaultPreferences = {
 };
 
 const MARKET_SYMBOLS = [
-  { id: 'btc', label: '비트코인 (BTC)', symbol: 'BINANCE:BTCUSDT', unit: 'KRW' },
-  { id: 'eth', label: '이더리움 (ETH)', symbol: 'BINANCE:ETHUSDT', unit: 'KRW' },
+  { id: 'btc', label: '비트코인 (BTC)', symbol: 'BINANCE:BTCUSDT', unit: 'USD' },
+  { id: 'eth', label: '이더리움 (ETH)', symbol: 'BINANCE:ETHUSDT', unit: 'USD' },
   { id: 'sp500', label: 'S&P 500', symbol: '^GSPC' },
   { id: 'nasdaq', label: '나스닥 지수', symbol: '^IXIC' },
   { id: 'vix', label: 'VIX 지수', symbol: '^VIX' },
