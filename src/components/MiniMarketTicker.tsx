@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { MarketQuote } from '../api/marketsApi';
+import { fetchMarketQuotes } from '../api/marketsApi';
 
 type MarketMetric = {
   id: string;
@@ -9,81 +11,96 @@ type MarketMetric = {
 };
 
 const BASE_MARKETS: MarketMetric[] = [
-  { id: 'btc', label: '비트코인 (BTC)', value: 98000000, unit: 'KRW', change: 1.2 },
-  { id: 'gold', label: '금 현물 (XAU)', value: 2375.8, unit: 'USD', change: 0.45 },
-  { id: 'oil', label: 'WTI 유가', value: 78.2, unit: 'USD', change: -0.35 },
-  { id: 'nasdaq', label: '나스닥 지수', value: 17950.23, change: -0.6 },
-  { id: 'usdkrw', label: 'USD/KRW 환율', value: 1356.4, change: 0.3 }
+  { id: 'btc', label: '비트코인 (BTC)', value: 73000, unit: 'USD', change: 1.2 },
+  { id: 'eth', label: '이더리움 (ETH)', value: 3800, unit: 'USD', change: 0.95 },
+  { id: 'sp500', label: 'S&P 500', value: 5250.4, unit: undefined, change: 0.45 },
+  { id: 'nasdaq', label: '나스닥 지수', value: 17950.23, unit: undefined, change: -0.6 },
+  { id: 'vix', label: 'VIX 지수', value: 16.8, unit: undefined, change: 0.6 },
+  { id: 'dji', label: '다우존스', value: 38000.12, unit: undefined, change: 0.22 }
 ];
 
 const formatValue = (market: MarketMetric): string => {
-  const formatter = new Intl.NumberFormat('ko-KR', {
-    style: market.unit === 'KRW' ? 'currency' : 'decimal',
-    currency: market.unit === 'KRW' ? 'KRW' : undefined,
-    minimumFractionDigits: market.id === 'btc' ? 0 : 2,
+  const options: Intl.NumberFormatOptions = {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  });
+  };
 
+  if (market.unit === 'USD') {
+    options.style = 'currency';
+    options.currency = 'USD';
+  } else if (market.unit === 'KRW') {
+    options.style = 'currency';
+    options.currency = 'KRW';
+    options.maximumFractionDigits = 0;
+  }
+
+  const formatter = new Intl.NumberFormat('en-US', options);
   return formatter.format(market.value);
 };
 
 const MiniMarketTicker: React.FC = () => {
   const [markets, setMarkets] = useState<MarketMetric[]>(BASE_MARKETS);
-
-  const intervalDelay = useMemo(() => 15000, []);
+  const intervalDelay = useMemo(() => 60_000, []);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setMarkets((current) =>
-        current.map((market) => {
-          const noiseBase = (() => {
-            switch (market.id) {
-              case 'btc':
-                return 200000;
-              case 'gold':
-              case 'oil':
-                return 1.5;
-              default:
-                return 10;
-            }
-          })();
-          const noise = (Math.random() - 0.5) * noiseBase;
-          const nextValue = Math.max(market.value + noise, 0);
-          const nextChange = ((nextValue - market.value) / Math.max(market.value, 1)) * 100;
+    let cancelled = false;
+    let timer: number | undefined;
 
-          return {
-            ...market,
-            value: parseFloat(nextValue.toFixed(market.id === 'btc' ? 0 : 2)),
-            change: parseFloat(nextChange.toFixed(2))
-          };
-        })
-      );
-    }, intervalDelay);
+    const mergeQuotes = (quotes: MarketQuote[]) => {
+      const map = new Map(quotes.map((quote) => [quote.id, quote]));
+      return BASE_MARKETS.map((base) => {
+        const quote = map.get(base.id);
+        const value = typeof quote?.price === 'number' && quote.price > 0 ? quote.price : base.value;
+        const change = typeof quote?.changePercent === 'number' ? quote.changePercent : base.change;
+        return {
+          ...base,
+          value,
+          change
+        };
+      });
+    };
+
+    const load = async () => {
+      try {
+        const quotes = await fetchMarketQuotes();
+        if (!cancelled) {
+          setMarkets(mergeQuotes(quotes));
+        }
+      } catch (error) {
+        console.warn('Failed to load market quotes', error);
+      } finally {
+        if (!cancelled) {
+          timer = window.setTimeout(load, intervalDelay);
+        }
+      }
+    };
+
+    void load();
 
     return () => {
-      window.clearInterval(intervalId);
+      cancelled = true;
+      if (timer) {
+        window.clearTimeout(timer);
+      }
     };
   }, [intervalDelay]);
 
   return (
-    <div className="w-full border-t border-slate-200 bg-slate-50 px-6 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-3 text-center sm:gap-5">
+    <div className="w-full border-t border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-4 sm:gap-5">
         {markets.map((market) => {
           const isUp = market.change >= 0;
           const changeClass = isUp ? 'text-emerald-500' : 'text-rose-500';
           const sign = isUp ? '+' : '';
 
           return (
-            <React.Fragment key={market.id}>
-              <div className="flex flex-col items-center gap-1 sm:flex-row sm:gap-2">
-                <span className="font-medium text-slate-700 dark:text-slate-200">{market.label}</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">{formatValue(market)}</span>
-                <span className={`${changeClass} font-medium`}>{`${sign}${market.change.toFixed(2)}%`}</span>
-              </div>
-              <span aria-hidden="true" className="text-slate-300 dark:text-slate-600 last:hidden sm:px-1">
-                |
+            <div key={market.id} className="flex flex-col items-center leading-tight sm:text-xs text-[11px]">
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{market.label}</span>
+              <span className="text-slate-600 dark:text-slate-300">
+                {formatValue(market)}{' '}
+                <span className={changeClass}>{`${sign}${market.change.toFixed(2)}%`}</span>
               </span>
-            </React.Fragment>
+            </div>
           );
         })}
       </div>

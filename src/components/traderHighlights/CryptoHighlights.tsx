@@ -1,6 +1,12 @@
 import React from 'react';
 import MiniMarketTicker from '../MiniMarketTicker';
 
+const mockWatchlist = [
+  { pair: 'BTC/USDT', change: '+2.4%' },
+  { pair: 'ETH/USDT', change: '-1.1%' },
+  { pair: 'SOL/USDT', change: '+0.8%' }
+];
+
 const CryptoHighlights: React.FC = () => (
   <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <header className="mb-4 space-y-1">
@@ -24,6 +30,14 @@ const CryptoHighlights: React.FC = () => (
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
           주기적으로 전략을 검토하고, 가격 알림을 설정해 예상 리스크를 관리하세요.
         </p>
+        <ul className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-300">
+          {mockWatchlist.map((item) => (
+            <li key={item.pair} className="flex items-center justify-between">
+              <span>{item.pair}</span>
+              <span className={item.change.startsWith('-') ? 'text-red-500' : 'text-emerald-500'}>{item.change}</span>
+            </li>
+          ))}
+        </ul>
       </article>
     </div>
     <div className="mt-6">

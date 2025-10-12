@@ -30,6 +30,7 @@ interface PortfolioState {
   deleteGoal: () => Promise<void>;
   logout: () => void;
   clearError: () => void;
+  setTraderTypeLocal: (type: TraderType) => void;
 }
 
 const BASE_CURRENCY_DEFAULT: SupportedCurrency = 'KRW';
@@ -249,5 +250,9 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
 
   clearError: () => {
     set({ error: null, goalError: null });
+  },
+
+  setTraderTypeLocal: (type: TraderType) => {
+    set({ traderType: type });
   }
 }));

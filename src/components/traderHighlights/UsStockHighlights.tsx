@@ -1,5 +1,10 @@
 import React from 'react';
 
+const mockEarnings = [
+  { ticker: 'AAPL', date: '10/24', focus: '서비스 매출 & 마진' },
+  { ticker: 'NVDA', date: '11/20', focus: '데이터센터 수요' }
+];
+
 const UsStockHighlights: React.FC = () => (
   <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <header className="mb-4 space-y-1">
@@ -29,6 +34,13 @@ const UsStockHighlights: React.FC = () => (
         <p className="text-xs text-slate-500 dark:text-slate-400">
           실적 시즌에는 가이던스와 마진 전망을 기록하고, 변동성 지수(VIX)를 참고해 포지션 규모를 조정하세요.
         </p>
+        <ul className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-300">
+          {mockEarnings.map((item) => (
+            <li key={item.ticker}>
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{item.ticker}</span> · {item.date} · {item.focus}
+            </li>
+          ))}
+        </ul>
       </article>
     </div>
   </section>

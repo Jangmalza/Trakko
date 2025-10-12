@@ -1,6 +1,7 @@
 ﻿import { create } from 'zustand';
 import type { AuthUser } from '../api/authApi';
 import { buildGoogleLoginUrl, fetchCurrentUser, logoutRequest } from '../api/authApi';
+import type { TraderType } from '../data/portfolioTypes';
 import { usePortfolioStore } from './portfolioStore';
 import { usePreferencesStore } from './preferencesStore';
 
@@ -13,6 +14,7 @@ interface AuthState {
   bootstrap: () => Promise<void>;
   refetch: () => Promise<AuthUser | null>;
   logout: () => Promise<void>;
+  setTraderType: (type: TraderType) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -54,5 +56,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     usePortfolioStore.getState().logout();
     usePreferencesStore.getState().reset();
     set({ user: null, error: null, hasChecked: true, checking: false });
+  },
+  setTraderType: (type) => {
+    set((state) => (state.user ? { user: { ...state.user, traderType: type } } : {}));
   }
 }));

@@ -1,5 +1,10 @@
 import React from 'react';
 
+const mockThemes = [
+  { name: '반도체', note: '수출 회복 기대, D램 가격 모니터' },
+  { name: '2차전지', note: '원자재 가격, IRA 관련 뉴스 체크' }
+];
+
 const KrStockHighlights: React.FC = () => (
   <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
     <header className="mb-4 space-y-1">
@@ -18,10 +23,17 @@ const KrStockHighlights: React.FC = () => (
         </ul>
       </article>
       <article className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">관심 섹터 메모</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            반도체, 2차전지, 소비 관련 업종 등 테마별 이슈를 기록하고, 실적 발표 일정과 공시를 확인하세요.
-          </p>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">관심 섹터 메모</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          반도체, 2차전지, 소비 관련 업종 등 테마별 이슈를 기록하고, 실적 발표 일정과 공시를 확인하세요.
+        </p>
+        <ul className="mt-3 space-y-1 text-xs text-slate-500 dark:text-slate-300">
+          {mockThemes.map((item) => (
+            <li key={item.name}>
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{item.name}</span> · {item.note}
+            </li>
+          ))}
+        </ul>
       </article>
     </div>
   </section>

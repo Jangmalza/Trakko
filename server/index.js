@@ -25,6 +25,7 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL ?? `${process.env.API_BASE_URL ?? `http://localhost:${PORT}`}/api/auth/google/callback`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY ?? '';
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '')
   .split(',')
   .map((email) => email.trim().toLowerCase())
@@ -45,6 +46,18 @@ const defaultPreferences = {
   currency: BASE_CURRENCY,
   locale: currencyLocales[BASE_CURRENCY]
 };
+
+const MARKET_SYMBOLS = [
+  { id: 'btc', label: '비트코인 (BTC)', symbol: 'BINANCE:BTCUSDT', unit: 'KRW' },
+  { id: 'eth', label: '이더리움 (ETH)', symbol: 'BINANCE:ETHUSDT', unit: 'KRW' },
+  { id: 'sp500', label: 'S&P 500', symbol: '^GSPC' },
+  { id: 'nasdaq', label: '나스닥 지수', symbol: '^IXIC' },
+  { id: 'vix', label: 'VIX 지수', symbol: '^VIX' },
+  { id: 'dji', label: '다우존스', symbol: '^DJI' }
+];
+
+const MARKET_CACHE_TTL_MS = 60 * 1000;
+const marketCache = new Map();
 
 const CLIENT_BASE_URL_CLEAN = CLIENT_BASE_URL.replace(/\/$/, '');
 const CLIENT_ORIGIN = (() => {
@@ -287,6 +300,65 @@ function normalizeTraderType(value) {
   if (typeof value !== 'string') return 'KR_STOCK';
   const upper = value.toUpperCase().replace(/-/g, '_');
   return TRADER_TYPE_VALUES.includes(upper) ? upper : 'KR_STOCK';
+}
+
+async function fetchMarketQuote(symbolConfig) {
+  const cached = marketCache.get(symbolConfig.id);
+  const now = Date.now();
+  if (cached && now - cached.fetchedAt < MARKET_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  if (!FINNHUB_API_KEY) {
+    throw new Error('FINNHUB_API_KEY is not configured');
+  }
+
+  const url = new URL('https://finnhub.io/api/v1/quote');
+  url.searchParams.set('symbol', symbolConfig.symbol);
+  url.searchParams.set('token', FINNHUB_API_KEY);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Finnhub quote request failed (${response.status})`);
+  }
+
+  const data = await response.json();
+  const price = typeof data?.c === 'number' ? data.c : null;
+  const changePercent = typeof data?.dp === 'number' ? data.dp : null;
+
+  const result = {
+    id: symbolConfig.id,
+    label: symbolConfig.label,
+    price,
+    changePercent
+  };
+
+  marketCache.set(symbolConfig.id, { data: result, fetchedAt: now });
+  return result;
+}
+
+async function fetchMarketQuotes() {
+  const results = [];
+  for (const symbol of MARKET_SYMBOLS) {
+    try {
+      const quote = await fetchMarketQuote(symbol);
+      results.push(quote);
+    } catch (error) {
+      console.warn(`Failed to fetch market quote for ${symbol.symbol}`, error);
+      const cached = marketCache.get(symbol.id);
+      if (cached) {
+        results.push(cached.data);
+      } else {
+        results.push({
+          id: symbol.id,
+          label: symbol.label,
+          price: null,
+          changePercent: null
+        });
+      }
+    }
+  }
+  return results;
 }
 
 async function ensureUserRecord(sessionUser) {
@@ -545,6 +617,7 @@ async function buildPortfolioSummary(userId) {
     totalTrades: portfolio.trades.length,
     recentTrades,
     currency: portfolio.displayCurrency,
+    traderType: portfolio.traderType,
     formatNumber
   };
 }
@@ -973,6 +1046,46 @@ app.post('/api/portfolio/reset', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/profile/trader-type', requireAuth, async (req, res) => {
+  try {
+    const { traderType } = req.body ?? {};
+    if (typeof traderType !== 'string') {
+      return res.status(400).json({ message: 'traderType is required' });
+    }
+
+    const normalized = normalizeTraderType(traderType);
+
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+
+    const updated = await prisma.user.update({
+      where: { id: sessionUser.id },
+      data: { traderType: normalized }
+    });
+
+    sessionUser.traderType = updated.traderType;
+
+    res.json({ traderType: updated.traderType });
+  } catch (error) {
+    console.error('Failed to update trader type', error);
+    res.status(500).json({ message: '거래 유형을 변경하지 못했습니다.' });
+  }
+});
+
+app.get('/api/markets/indices', async (_req, res) => {
+  if (!FINNHUB_API_KEY) {
+    return res.status(503).json({ message: '시장 데이터를 불러올 수 없습니다. 관리자에게 문의하세요.' });
+  }
+
+  try {
+    const quotes = await fetchMarketQuotes();
+    res.json(quotes);
+  } catch (error) {
+    console.error('Failed to fetch market quotes', error);
+    res.status(503).json({ message: '시장 데이터를 불러오지 못했습니다.' });
+  }
+});
+
 app.get('/api/goals/current', requireAuth, async (req, res) => {
   try {
     const sessionUser = req.user;
@@ -1113,12 +1226,34 @@ app.post('/api/chat/assistant', requireAuth, async (req, res) => {
       ? summary.recentTrades.map((line, index) => `${index + 1}. ${line}`).join('\n')
       : 'No recent trades available.';
 
+    const traderPrompt = (() => {
+      switch (summary.traderType) {
+        case 'CRYPTO':
+          return [
+            '사용자는 암호화폐 트레이더입니다. 코인 변동성, 온체인 흐름, 레버리지 관리 팁을 강조하세요.',
+            '특정 코인에 대한 언급 시 항상 변동성·리스크 경고를 포함하세요.'
+          ].join(' ');
+        case 'US_STOCK':
+          return [
+            '사용자는 미국주식 트레이더입니다. 지수 흐름, 실적 시즌 일정, 거시 지표 영향을 중심으로 조언하세요.',
+            '환율과 글로벌 이벤트가 포지션에 미치는 영향을 함께 언급하세요.'
+          ].join(' ');
+        case 'KR_STOCK':
+        default:
+          return [
+            '사용자는 한국주식 트레이더입니다. 환율, 외국인 수급, 섹터 로테이션에 주목하도록 안내하세요.',
+            '국내 시장 특성에 맞는 리스크 관리 포인트를 함께 제시하세요.'
+          ].join(' ');
+      }
+    })();
+
     const systemPrompt = [
       'You are Trakko, an investment journal assistant that offers actionable trading insights.',
       'Respond in Korean using concise sentences without Markdown syntax, bullets, or bold styling.',
       'Clearly separate sections with short headings such as "[요약]" or "[다음 조치]".',
       'Highlight risk management tips, pattern recognition, and next-step suggestions with plain sentences.',
-      'If information is missing, acknowledge it and guide the user on how to collect it.'
+      'If information is missing, acknowledge it and guide the user on how to collect it.',
+      traderPrompt
     ].join(' ');
 
     const contextPrompt = `Portfolio snapshot:\n${summaryLines.join('\n')}\n\nRecent trades:\n${recentLines}`;
