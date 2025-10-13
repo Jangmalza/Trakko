@@ -98,3 +98,4 @@ sudo certbot --nginx -d api.your-domain -d your-domain
 ## 10. 백업 및 유지 관리
 - `prisma migrate diff`로 스키마 변경을 관리하고, 정기적으로 덤프 백업을 수행하세요.
 - `npm audit`으로 의존성 보안 이슈를 주기적으로 확인하세요.
+- Prisma 마이그레이션 절차는 `docs/PRISMA_MIGRATION_GUIDE.md`에서 상세 가이드를 참고하세요.
