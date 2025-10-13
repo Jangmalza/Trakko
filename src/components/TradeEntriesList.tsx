@@ -171,6 +171,9 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
   const renderTradeRow = (trade: TradeEntry, paddingClass = 'px-5 py-4') => {
     const tone =
       trade.profitLoss >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+    const entryNote = trade.entryRationale?.trim();
+    const exitNote = trade.exitRationale?.trim();
+    const legacyNote = trade.rationale?.trim();
 
     return (
       <li
@@ -205,8 +208,24 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
               </button>
             </div>
           </div>
-          {trade.rationale && (
-            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{trade.rationale}</p>
+          {(entryNote || exitNote || legacyNote) && (
+            <div className="space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              {entryNote && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">진입 근거</p>
+                  <p className="mt-1">{entryNote}</p>
+                </div>
+              )}
+              {exitNote && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">매도 근거</p>
+                  <p className="mt-1">{exitNote}</p>
+                </div>
+              )}
+              {!entryNote && !exitNote && legacyNote && (
+                <p>{legacyNote}</p>
+              )}
+            </div>
           )}
         </div>
       </li>

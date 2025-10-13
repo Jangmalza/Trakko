@@ -13,7 +13,8 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
   const [ticker, setTicker] = useState('');
   const [profitLoss, setProfitLoss] = useState('');
   const [tradeDate, setTradeDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [rationale, setRationale] = useState('');
+  const [entryRationale, setEntryRationale] = useState('');
+  const [exitRationale, setExitRationale] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   const parsedProfitLoss = useMemo(() => {
@@ -44,13 +45,15 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
     await onSubmit({
       ticker: ticker.trim(),
       profitLoss: parsedProfitLoss,
-      rationale: rationale.trim(),
-      tradeDate
+      tradeDate,
+      entryRationale: entryRationale.trim() || undefined,
+      exitRationale: exitRationale.trim() || undefined
     });
 
     setTicker('');
     setProfitLoss('');
-    setRationale('');
+    setEntryRationale('');
+    setExitRationale('');
   };
 
   return (
@@ -95,12 +98,23 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
       </div>
 
       <label className="space-y-3 pt-2">
-        <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">매매 근거</span>
+        <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">진입 근거</span>
         <textarea
-          value={rationale}
-          onChange={(event) => setRationale(event.target.value)}
-          rows={4}
-          placeholder="왜 이 거래를 했나요? 다음엔 무엇을 볼 것인가요?"
+          value={entryRationale}
+          onChange={(event) => setEntryRationale(event.target.value)}
+          rows={3}
+          placeholder="진입 시 어떤 시그널을 확인했나요?"
+          className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 transition focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
+        />
+      </label>
+
+      <label className="space-y-3">
+        <span className="block text-xs font-medium text-slate-600 dark:text-slate-300">매도 근거</span>
+        <textarea
+          value={exitRationale}
+          onChange={(event) => setExitRationale(event.target.value)}
+          rows={3}
+          placeholder="청산/손절 시 어떤 조건이 충족되었나요?"
           className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 transition focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
         />
       </label>

@@ -36,7 +36,9 @@ model Trade {
   userId     String
   ticker     String
   profitLoss Decimal  @db.Decimal(18, 2)
-  rationale  String
+  rationale  String?  @db.Text
+  entryRationale String? @db.Text
+  exitRationale  String? @db.Text
   tradeDate  DateTime
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -19,7 +19,8 @@ const DESCRIPTION = '거래 정보를 업데이트하거나 필요하지 않은 
 const TICKER_LABEL = '티커';
 const PROFIT_LABEL = '손익';
 const DATE_LABEL = '거래 날짜';
-const NOTE_LABEL = '메모';
+const ENTRY_NOTE_LABEL = '진입 근거';
+const EXIT_NOTE_LABEL = '매도 근거';
 const SAVE_LABEL = '저장';
 const DELETE_LABEL = '삭제';
 const CANCEL_LABEL = '취소';
@@ -39,7 +40,8 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
   const [ticker, setTicker] = useState('');
   const [profitLoss, setProfitLoss] = useState('');
   const [tradeDate, setTradeDate] = useState('');
-  const [rationale, setRationale] = useState('');
+  const [entryRationale, setEntryRationale] = useState('');
+  const [exitRationale, setExitRationale] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,7 +49,8 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
       setTicker('');
       setProfitLoss('');
       setTradeDate('');
-      setRationale('');
+      setEntryRationale('');
+      setExitRationale('');
       setLocalError(null);
       return;
     }
@@ -55,7 +58,9 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
     setTicker(trade.ticker);
     setProfitLoss(String(trade.profitLoss));
     setTradeDate(trade.tradeDate);
-    setRationale(trade.rationale ?? '');
+    const fallbackNote = trade.entryRationale ?? trade.rationale ?? '';
+    setEntryRationale(fallbackNote);
+    setExitRationale(trade.exitRationale ?? '');
     setLocalError(null);
   }, [trade]);
 
@@ -81,8 +86,9 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
       await onSave({
         ticker: ticker.trim(),
         profitLoss: parsedProfitLoss,
-        rationale: rationale.trim(),
-        tradeDate
+        tradeDate,
+        entryRationale: entryRationale.trim() || undefined,
+        exitRationale: exitRationale.trim() || undefined
       });
     } catch {
       // 오류는 상위 컴포넌트에서 처리
@@ -143,13 +149,24 @@ const EditTradeModal: React.FC<EditTradeModalProps> = ({
           </label>
 
           <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-            {NOTE_LABEL}
+            {ENTRY_NOTE_LABEL}
             <textarea
-              value={rationale}
-              onChange={(event) => setRationale(event.target.value)}
-              rows={4}
+              value={entryRationale}
+              onChange={(event) => setEntryRationale(event.target.value)}
+              rows={3}
               className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
-              placeholder="어떤 판단으로 거래했는지 자유롭게 적어주세요."
+              placeholder="진입 시 어떤 근거를 확인했나요?"
+            />
+          </label>
+
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+            {EXIT_NOTE_LABEL}
+            <textarea
+              value={exitRationale}
+              onChange={(event) => setExitRationale(event.target.value)}
+              rows={3}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
+              placeholder="청산 또는 손절 시점을 기록하세요."
             />
           </label>
 

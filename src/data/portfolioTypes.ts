@@ -6,7 +6,9 @@ export interface TradeEntry {
   id: string;
   ticker: string;
   profitLoss: number;
-  rationale: string;
+  rationale?: string | null;
+  entryRationale?: string | null;
+  exitRationale?: string | null;
   tradeDate: string;
   createdAt: string;
   currency?: SupportedCurrency;
@@ -15,8 +17,10 @@ export interface TradeEntry {
 export interface NewTradeEntry {
   ticker: string;
   profitLoss: number;
-  rationale: string;
   tradeDate: string;
+  rationale?: string;
+  entryRationale?: string;
+  exitRationale?: string;
 }
 
 export type GoalPeriod = 'MONTHLY' | 'ANNUAL';

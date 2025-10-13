@@ -491,7 +491,9 @@ async function mapTradeForResponse(trade, baseCurrency, displayCurrency) {
     id: trade.id,
     ticker: trade.ticker,
     profitLoss: converted,
-    rationale: trade.rationale,
+    rationale: trade.rationale ?? null,
+    entryRationale: trade.entryRationale ?? null,
+    exitRationale: trade.exitRationale ?? null,
     tradeDate: tradeDateToString(trade.tradeDate),
     createdAt: trade.createdAt.toISOString(),
     currency: displayCurrency
@@ -891,7 +893,9 @@ app.post('/api/portfolio/trades', requireAuth, async (req, res) => {
     const {
       ticker,
       profitLoss,
-      rationale = '',
+      rationale,
+      entryRationale,
+      exitRationale,
       tradeDate,
       currency
     } = req.body ?? {};
@@ -931,7 +935,9 @@ app.post('/api/portfolio/trades', requireAuth, async (req, res) => {
         userId: sessionUser.id,
         ticker: ticker.trim().toUpperCase(),
         profitLoss: new Prisma.Decimal(profitLossInBase.toFixed(2)),
-        rationale: String(rationale ?? ''),
+        rationale: rationale !== undefined && rationale !== null ? String(rationale) : null,
+        entryRationale: entryRationale !== undefined && entryRationale !== null ? String(entryRationale) : null,
+        exitRationale: exitRationale !== undefined && exitRationale !== null ? String(exitRationale) : null,
         tradeDate: new Date(`${tradeDate}T00:00:00.000Z`)
       }
     });
@@ -950,22 +956,24 @@ app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
     const {
       ticker,
       profitLoss,
-      rationale = '',
+      rationale,
+      entryRationale,
+      exitRationale,
       tradeDate,
       currency
     } = req.body ?? {};
 
     if (typeof ticker !== 'string' || ticker.trim() === '') {
-      return res.status(400).json({ message: '?곗빱瑜??낅젰?댁＜?몄슂.' });
+      return res.status(400).json({ message: 'ticker is required' });
     }
 
     const profitLossValue = Number(profitLoss);
     if (!Number.isFinite(profitLossValue)) {
-      return res.status(400).json({ message: '?먯씡 湲덉븸? ?レ옄?ъ빞 ?⑸땲??' });
+      return res.status(400).json({ message: 'profitLoss must be a number' });
     }
 
     if (typeof tradeDate !== 'string' || tradeDate.trim() === '') {
-      return res.status(400).json({ message: '嫄곕옒 ?좎쭨瑜??낅젰?댁＜?몄슂.' });
+      return res.status(400).json({ message: 'tradeDate is required' });
     }
 
     const sessionUser = req.user;
@@ -974,7 +982,7 @@ app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
 
     const existingTrade = await prisma.trade.findUnique({ where: { id: tradeId } });
     if (!existingTrade || existingTrade.userId !== sessionUser.id) {
-      return res.status(404).json({ message: '嫄곕옒瑜?李얠쓣 ???놁뒿?덈떎.' });
+      return res.status(404).json({ message: '거래를 찾을 수 없습니다.' });
     }
 
     const baseCurrency = normalizeCurrency(user.baseCurrency ?? BASE_CURRENCY);
@@ -991,7 +999,9 @@ app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
       data: {
         ticker: ticker.trim().toUpperCase(),
         profitLoss: new Prisma.Decimal(profitLossInBase.toFixed(2)),
-        rationale: String(rationale ?? ''),
+        rationale: rationale !== undefined && rationale !== null ? String(rationale) : null,
+        entryRationale: entryRationale !== undefined && entryRationale !== null ? String(entryRationale) : null,
+        exitRationale: exitRationale !== undefined && exitRationale !== null ? String(exitRationale) : null,
         tradeDate: new Date(`${tradeDate}T00:00:00.000Z`)
       }
     });
@@ -1000,7 +1010,7 @@ app.patch('/api/portfolio/trades/:tradeId', requireAuth, async (req, res) => {
     res.json(response);
   } catch (error) {
     console.error('Failed to update trade', error);
-    res.status(500).json({ message: '嫄곕옒瑜??섏젙?섏? 紐삵뻽?듬땲??' });
+    res.status(500).json({ message: 'Failed to update trade' });
   }
 });
 
