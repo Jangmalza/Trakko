@@ -1,4 +1,4 @@
-import type { PerformanceGoalSummary, UpsertGoalPayload } from '../data/portfolioTypes';
+import type { GoalPeriod, PerformanceGoalSummary, UpsertGoalPayload } from '../data/portfolioTypes';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api';
 const GOAL_ENDPOINT = API_BASE_URL.replace(/\/$/, '') + '/goals/current';
@@ -29,14 +29,34 @@ export async function upsertCurrentGoal(payload: UpsertGoalPayload): Promise<Per
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      ...payload,
+      period: (payload.period ?? 'MONTHLY').toUpperCase()
+    })
   });
 
   return parseGoalResponse(response);
 }
 
-export async function deleteCurrentGoal(): Promise<PerformanceGoalSummary | null> {
-  const response = await fetch(GOAL_ENDPOINT, {
+interface DeleteGoalOptions {
+  period?: GoalPeriod;
+  year?: number;
+  month?: number;
+}
+
+export async function deleteCurrentGoal(options: DeleteGoalOptions = {}): Promise<PerformanceGoalSummary | null> {
+  const url = new URL(GOAL_ENDPOINT);
+  if (options.period) {
+    url.searchParams.set('period', options.period);
+  }
+  if (typeof options.year === 'number') {
+    url.searchParams.set('year', String(options.year));
+  }
+  if (typeof options.month === 'number') {
+    url.searchParams.set('month', String(options.month));
+  }
+
+  const response = await fetch(url.toString(), {
     method: 'DELETE',
     credentials: 'include'
   });

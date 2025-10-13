@@ -19,6 +19,8 @@ export interface NewTradeEntry {
   tradeDate: string;
 }
 
+export type GoalPeriod = 'MONTHLY' | 'ANNUAL';
+
 export interface PortfolioSnapshot {
   initialSeed: number | null;
   trades: TradeEntry[];
@@ -30,21 +32,30 @@ export interface PortfolioSnapshot {
 }
 
 export interface PerformanceGoalSummary {
-  goal: {
-    id: string;
-    targetAmount: number;
-    currency: SupportedCurrency;
-    targetYear: number;
-    targetMonth: number;
-  } | null;
+  monthly: GoalProgressSummary;
+  annual: GoalProgressSummary;
+}
+
+export interface GoalProgressSummary {
+  period: GoalPeriod;
+  goal: GoalProgressDetail | null;
   achievedAmount: number;
   remainingAmount: number | null;
   progressPercent: number | null;
-  month: {
+  timeFrame: {
     year: number;
-    month: number;
+    month: number | null;
     label: string;
   };
+}
+
+export interface GoalProgressDetail {
+  id: string;
+  targetAmount: number;
+  currency: SupportedCurrency;
+  targetYear: number;
+  targetMonth: number | null;
+  period: GoalPeriod;
 }
 
 export interface UpsertGoalPayload {
@@ -52,4 +63,5 @@ export interface UpsertGoalPayload {
   currency: SupportedCurrency;
   year?: number;
   month?: number;
+  period?: GoalPeriod;
 }

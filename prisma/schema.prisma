@@ -46,14 +46,15 @@ model PerformanceGoal {
   id           String   @id @default(cuid())
   userId       String
   targetYear   Int
-  targetMonth  Int
+  targetMonth  Int      @default(0)
   targetAmount Decimal @db.Decimal(18, 2)
   currency     String
+  period       GoalPeriod @default(MONTHLY)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, targetYear, targetMonth])
+  @@unique([userId, period, targetYear, targetMonth])
 }
 
 enum UserRole {
@@ -89,4 +90,9 @@ model Announcement {
   author      User?              @relation(fields: [authorId], references: [id], onDelete: SetNull)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
+}
+
+enum GoalPeriod {
+  MONTHLY
+  ANNUAL
 }

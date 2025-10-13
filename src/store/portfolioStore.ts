@@ -1,5 +1,5 @@
 ﻿import { create } from 'zustand';
-import type { NewTradeEntry, TradeEntry, PerformanceGoalSummary, UpsertGoalPayload, TraderType } from '../data/portfolioTypes';
+import type { NewTradeEntry, TradeEntry, PerformanceGoalSummary, UpsertGoalPayload, TraderType, GoalPeriod } from '../data/portfolioTypes';
 import { createTradeEntry, fetchPortfolio, resetPortfolio, upsertInitialSeed, updateTradeEntry, deleteTradeEntry } from '../api/portfolioApi';
 import { fetchCurrentGoal, upsertCurrentGoal, deleteCurrentGoal } from '../api/goalsApi';
 import { usePreferencesStore } from './preferencesStore';
@@ -27,7 +27,7 @@ interface PortfolioState {
   resetData: () => Promise<void>;
   refreshPerformanceGoal: () => Promise<void>;
   upsertGoal: (payload: UpsertGoalPayload) => Promise<void>;
-  deleteGoal: () => Promise<void>;
+  deleteGoal: (options?: { period?: GoalPeriod; year?: number; month?: number }) => Promise<void>;
   logout: () => void;
   clearError: () => void;
   setTraderTypeLocal: (type: TraderType) => void;
@@ -216,10 +216,10 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
     }
   },
 
-  deleteGoal: async () => {
+  deleteGoal: async (options) => {
     set({ goalLoading: true, goalError: null });
     try {
-      const summary = await deleteCurrentGoal();
+      const summary = await deleteCurrentGoal(options ?? {});
       set({ performanceGoal: summary ?? null, goalLoading: false, error: null });
     } catch (error) {
       console.error('Failed to delete performance goal', error);

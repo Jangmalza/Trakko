@@ -33,6 +33,8 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '')
 const ADMIN_EMAIL_SET = new Set(ADMIN_EMAILS);
 const ANNOUNCEMENT_STATUS_VALUES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 const ANNOUNCEMENT_STATUS_SET = new Set(ANNOUNCEMENT_STATUS_VALUES);
+const GOAL_PERIOD_VALUES = ['MONTHLY', 'ANNUAL'];
+const GOAL_PERIOD_SET = new Set(GOAL_PERIOD_VALUES);
 
 const SUPPORTED_CURRENCIES = new Set(['USD', 'KRW']);
 const TRADER_TYPE_VALUES = ['CRYPTO', 'US_STOCK', 'KR_STOCK'];
@@ -123,6 +125,12 @@ const formatMonthLabel = (year, month, displayCurrency) => {
   const locale = currencyLocales[displayCurrency] ?? 'en-US';
   const formatter = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' });
   return formatter.format(new Date(year, month - 1, 1));
+};
+
+const formatYearLabel = (year, displayCurrency) => {
+  const locale = currencyLocales[displayCurrency] ?? 'en-US';
+  const formatter = new Intl.DateTimeFormat(locale, { year: 'numeric' });
+  return formatter.format(new Date(year, 0, 1));
 };
 
 const roundCurrency = (value, currency) => {
@@ -526,61 +534,92 @@ async function getPortfolioResponse(userId) {
 
 async function buildPerformanceGoalSummary({ userId, baseCurrency, displayCurrency, trades, year, month }) {
   const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-  const achievedAmountRaw = trades
+  const achievedMonthlyRaw = trades
     .filter((trade) => trade.tradeDate?.startsWith(monthKey))
     .reduce((acc, trade) => acc + trade.profitLoss, 0);
+  const achievedAnnualRaw = trades
+    .filter((trade) => trade.tradeDate?.startsWith(`${year}-`))
+    .reduce((acc, trade) => acc + trade.profitLoss, 0);
 
-  const achievedAmount = roundCurrency(achievedAmountRaw, displayCurrency);
+  const achievedMonthly = roundCurrency(achievedMonthlyRaw, displayCurrency);
+  const achievedAnnual = roundCurrency(achievedAnnualRaw, displayCurrency);
+
   const monthLabel = formatMonthLabel(year, month, displayCurrency);
+  const yearLabel = formatYearLabel(year, displayCurrency);
 
-  const goal = await prisma.performanceGoal.findUnique({
-    where: {
-      userId_targetYear_targetMonth: {
-        userId,
-        targetYear: year,
-        targetMonth: month
+  const [monthlyGoalRecord, annualGoalRecord] = await Promise.all([
+    prisma.performanceGoal.findUnique({
+      where: {
+        userId_period_targetYear_targetMonth: {
+          userId,
+          period: 'MONTHLY',
+          targetYear: year,
+          targetMonth: month
+        }
       }
-    }
-  });
+    }),
+    prisma.performanceGoal.findUnique({
+      where: {
+        userId_period_targetYear_targetMonth: {
+          userId,
+          period: 'ANNUAL',
+          targetYear: year,
+          targetMonth: 0
+        }
+      }
+    })
+  ]);
 
-  if (!goal) {
-    return {
+  const buildSection = async (period, goalRecord, achievedAmount, label, monthValue) => {
+    const base = {
+      period,
       goal: null,
       achievedAmount,
       remainingAmount: null,
       progressPercent: null,
-      month: {
+      timeFrame: {
         year,
-        month,
-        label: monthLabel
+        month: typeof monthValue === 'number' ? monthValue : null,
+        label
       }
     };
-  }
 
-  const targetAmountBase = Number(goal.targetAmount);
-  const targetAmountDisplayRaw = await convertAmount(targetAmountBase, baseCurrency, displayCurrency);
-  const targetAmountDisplay = roundCurrency(targetAmountDisplayRaw, displayCurrency);
-  const remainingAmount = roundCurrency(targetAmountDisplay - achievedAmount, displayCurrency);
-  const progressPercent = targetAmountDisplay > 0
-    ? Math.min(100, Math.max(0, (achievedAmount / targetAmountDisplay) * 100))
-    : null;
+    if (!goalRecord) {
+      return base;
+    }
+
+    const targetAmountBase = Number(goalRecord.targetAmount);
+    const targetAmountDisplayRaw = await convertAmount(targetAmountBase, baseCurrency, displayCurrency);
+    const targetAmountDisplay = roundCurrency(targetAmountDisplayRaw, displayCurrency);
+    const remainingAmount = roundCurrency(targetAmountDisplay - achievedAmount, displayCurrency);
+    const progressRatio = targetAmountDisplay > 0 ? (achievedAmount / targetAmountDisplay) * 100 : null;
+    const progressPercent = progressRatio !== null
+      ? Math.round(Math.min(100, Math.max(0, progressRatio)) * 100) / 100
+      : null;
+
+    return {
+      ...base,
+      goal: {
+        id: goalRecord.id,
+        targetAmount: targetAmountDisplay,
+        currency: displayCurrency,
+        targetYear: goalRecord.targetYear,
+        targetMonth: goalRecord.targetMonth === 0 ? null : goalRecord.targetMonth,
+        period: goalRecord.period
+      },
+      remainingAmount,
+      progressPercent
+    };
+  };
+
+  const [monthlySummary, annualSummary] = await Promise.all([
+    buildSection('MONTHLY', monthlyGoalRecord, achievedMonthly, monthLabel, month),
+    buildSection('ANNUAL', annualGoalRecord, achievedAnnual, yearLabel, null)
+  ]);
 
   return {
-    goal: {
-      id: goal.id,
-      targetAmount: targetAmountDisplay,
-      currency: displayCurrency,
-      targetYear: goal.targetYear,
-      targetMonth: goal.targetMonth
-    },
-    achievedAmount,
-    remainingAmount,
-    progressPercent: progressPercent !== null ? Math.round(progressPercent * 100) / 100 : null,
-    month: {
-      year,
-      month,
-      label: monthLabel
-    }
+    monthly: monthlySummary,
+    annual: annualSummary
   };
 }
 
@@ -1104,7 +1143,8 @@ app.post('/api/goals/current', requireAuth, async (req, res) => {
       targetAmount,
       currency,
       year,
-      month
+      month,
+      period
     } = req.body ?? {};
 
     const amountValue = Number(targetAmount);
@@ -1112,7 +1152,11 @@ app.post('/api/goals/current', requireAuth, async (req, res) => {
       return res.status(400).json({ message: 'targetAmount must be a positive number' });
     }
 
-    const { year: targetYear, month: targetMonth } = clampYearMonth(Number(year), Number(month));
+    const periodInput = typeof period === 'string' ? period.toUpperCase() : 'MONTHLY';
+    const normalizedPeriod = GOAL_PERIOD_SET.has(periodInput) ? periodInput : 'MONTHLY';
+
+    const { year: targetYear, month: targetMonthCandidate } = clampYearMonth(Number(year), Number(month));
+    const targetMonth = normalizedPeriod === 'ANNUAL' ? 0 : targetMonthCandidate;
 
     const sessionUser = req.user;
     await ensureUserRecord(sessionUser);
@@ -1128,22 +1172,26 @@ app.post('/api/goals/current', requireAuth, async (req, res) => {
 
     await prisma.performanceGoal.upsert({
       where: {
-        userId_targetYear_targetMonth: {
+        userId_period_targetYear_targetMonth: {
           userId: sessionUser.id,
+          period: normalizedPeriod,
           targetYear,
           targetMonth
         }
       },
       update: {
         targetAmount: new Prisma.Decimal(amountInBase.toFixed(2)),
-        currency: baseCurrency
+        currency: baseCurrency,
+        period: normalizedPeriod,
+        targetMonth
       },
       create: {
         userId: sessionUser.id,
         targetYear,
         targetMonth,
         targetAmount: new Prisma.Decimal(amountInBase.toFixed(2)),
-        currency: baseCurrency
+        currency: baseCurrency,
+        period: normalizedPeriod
       }
     });
 
@@ -1157,16 +1205,20 @@ app.post('/api/goals/current', requireAuth, async (req, res) => {
 
 app.delete('/api/goals/current', requireAuth, async (req, res) => {
   try {
-    const { year, month } = req.query ?? {};
-    const { year: targetYear, month: targetMonth } = clampYearMonth(Number(year), Number(month));
+    const { year, month, period } = req.query ?? {};
+    const periodInput = typeof period === 'string' ? period.toUpperCase() : 'MONTHLY';
+    const normalizedPeriod = GOAL_PERIOD_SET.has(periodInput) ? periodInput : 'MONTHLY';
+    const { year: targetYear, month: targetMonthCandidate } = clampYearMonth(Number(year), Number(month));
+    const targetMonth = normalizedPeriod === 'ANNUAL' ? 0 : targetMonthCandidate;
 
     const sessionUser = req.user;
     await ensureUserRecord(sessionUser);
 
     const existingGoal = await prisma.performanceGoal.findUnique({
       where: {
-        userId_targetYear_targetMonth: {
+        userId_period_targetYear_targetMonth: {
           userId: sessionUser.id,
+          period: normalizedPeriod,
           targetYear,
           targetMonth
         }

@@ -8,6 +8,7 @@ import { usePreferencesStore } from '../store/preferencesStore';
 interface TradeEntriesListProps {
   initialSeed: number;
   trades: TradeEntry[];
+  emptyMessage?: string;
 }
 
 const INITIAL_SEED_LABEL = '초기 자본';
@@ -36,7 +37,7 @@ const VIEW_MODE_OPTIONS: Array<{ value: ViewMode; label: string }> = [
   { value: 'monthly', label: '월별' }
 ];
 
-const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades }) => {
+const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades, emptyMessage }) => {
   const currency = usePreferencesStore((state) => state.currency);
   const traderType = usePortfolioStore((state) => state.traderType);
   const updateTrade = usePortfolioStore((state) => state.updateTrade);
@@ -295,7 +296,7 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
           </div>
         </div>
         {sorted.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-slate-500 dark:text-slate-400">{EMPTY_MESSAGE}</div>
+          <div className="px-5 py-12 text-center text-sm text-slate-500 dark:text-slate-400">{emptyMessage ?? EMPTY_MESSAGE}</div>
         ) : viewMode === 'list' ? (
           renderTradeList()
         ) : viewMode === 'daily' ? (

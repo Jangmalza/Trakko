@@ -23,11 +23,14 @@ const HeaderNavigation: React.FC = () => {
           to="/dashboard"
           className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100"
         >
-          <span className="text-2xl font-black tracking-[0.4em]">TRAKKO</span>
+          <span className="text-xl font-black tracking-[0.3em]">TRAKKO</span>
         </Link>
         <div className="flex items-center gap-4 text-sm">
           <Link to="/dashboard" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
             대시보드
+          </Link>
+          <Link to="/trades" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
+            거래 기록
           </Link>
           <Link to="/announcements" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
             공지사항
