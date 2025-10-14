@@ -8,21 +8,22 @@ datasource db {
 }
 
 model User {
-  id           String      @id
-  displayName  String?
-  email        String?
-  initialSeed  Decimal?    @db.Decimal(18, 2)
-  baseCurrency String      @default("KRW")
-  traderType   TraderType  @default(KR_STOCK)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  preferences  Preference?
-  trades       Trade[]
-  goals        PerformanceGoal[]
-  role         UserRole    @default(USER)
-  subscriptionTier SubscriptionTier @default(FREE)
-  announcements Announcement[]
-  communityPosts CommunityPost[] @relation("UserCommunityPosts")
+  id                String             @id
+  displayName       String?
+  email             String?
+  initialSeed       Decimal?           @db.Decimal(18, 2)
+  baseCurrency      String             @default("KRW")
+  traderType        TraderType         @default(KR_STOCK)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  preferences       Preference?
+  trades            Trade[]
+  goals             PerformanceGoal[]
+  role              UserRole           @default(USER)
+  subscriptionTier  SubscriptionTier   @default(FREE)
+  announcements     Announcement[]
+  communityPosts    CommunityPost[]    @relation("UserCommunityPosts")
+  communityComments CommunityComment[] @relation("UserCommunityComments")
 }
 
 model Preference {
@@ -33,41 +34,56 @@ model Preference {
 }
 
 model Trade {
-  id         String   @id @default(cuid())
-  userId     String
-  ticker     String
-  profitLoss Decimal  @db.Decimal(18, 2)
-  rationale  String?  @db.Text
-  entryRationale String? @db.Text
-  exitRationale  String? @db.Text
-  tradeDate  DateTime
-  createdAt  DateTime @default(now())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  userId         String
+  ticker         String
+  profitLoss     Decimal  @db.Decimal(18, 2)
+  rationale      String?  @db.Text
+  entryRationale String?  @db.Text
+  exitRationale  String?  @db.Text
+  tradeDate      DateTime
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PerformanceGoal {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   userId       String
   targetYear   Int
-  targetMonth  Int      @default(0)
-  targetAmount Decimal @db.Decimal(18, 2)
+  targetMonth  Int        @default(0)
+  targetAmount Decimal    @db.Decimal(18, 2)
   currency     String
   period       GoalPeriod @default(MONTHLY)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, period, targetYear, targetMonth])
 }
 
 model CommunityPost {
-  id        String   @id @default(cuid())
+  id        String             @id @default(cuid())
   userId    String?
   title     String
-  content   String   @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User?    @relation("UserCommunityPosts", fields: [userId], references: [id], onDelete: SetNull)
+  content   String             @db.Text
+  imageUrl  String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  user      User?              @relation("UserCommunityPosts", fields: [userId], references: [id], onDelete: SetNull)
+  comments  CommunityComment[]
+}
+
+model CommunityComment {
+  id        String        @id @default(cuid())
+  postId    String
+  userId    String?
+  content   String        @db.Text
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User?         @relation("UserCommunityComments", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId], name: "CommunityComment_postId_idx")
 }
 
 enum UserRole {

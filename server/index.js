@@ -5,14 +5,87 @@ import session from 'express-session';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { Prisma, PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
+import multer from 'multer';
 
 const prisma = new PrismaClient();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const fsPromises = fs.promises;
+
+const uploadsRoot = path.join(__dirname, 'uploads');
+const communityUploadsDir = path.join(uploadsRoot, 'community');
+if (!fs.existsSync(communityUploadsDir)) {
+  fs.mkdirSync(communityUploadsDir, { recursive: true });
+}
+
+const COMMUNITY_IMAGE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const COMMUNITY_ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const FALLBACK_IMAGE_EXTENSION = '.jpg';
+
+const communityImageStorage = multer.diskStorage({
+  destination: (_req, _file, callback) => {
+    callback(null, communityUploadsDir);
+  },
+  filename: (_req, file, callback) => {
+    const rawExt = (path.extname(file.originalname) || '').toLowerCase();
+    const safeExt = rawExt && ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(rawExt) ? rawExt : FALLBACK_IMAGE_EXTENSION;
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e6)}${safeExt}`;
+    callback(null, uniqueName);
+  }
+});
+
+const communityImageUpload = multer({
+  storage: communityImageStorage,
+  limits: {
+    fileSize: COMMUNITY_IMAGE_MAX_SIZE
+  },
+  fileFilter: (_req, file, callback) => {
+    if (COMMUNITY_ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      callback(null, true);
+    } else {
+      callback(new Error('이미지 파일만 업로드할 수 있습니다.'));
+    }
+  }
+});
+
+const removeFileIfExists = async (absolutePath) => {
+  if (!absolutePath) return;
+  try {
+    await fsPromises.unlink(absolutePath);
+  } catch (error) {
+    if (error && error.code !== 'ENOENT') {
+      console.warn('Failed to remove uploaded file', error);
+    }
+  }
+};
+
+const uploadCommunityImageMiddleware = (req, res, next) => {
+  communityImageUpload.single('image')(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    if (req.file?.path) {
+      void removeFileIfExists(req.file.path);
+    }
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: '이미지는 최대 5MB까지 업로드할 수 있습니다.' });
+      }
+      return res.status(400).json({ message: '이미지를 업로드하지 못했습니다.' });
+    }
+
+    return res.status(400).json({ message: error.message || '이미지를 업로드하지 못했습니다.' });
+  });
+};
+
+const buildCommunityImageUrl = (filename) => `/uploads/community/${filename}`;
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
@@ -707,6 +780,7 @@ app.use(passport.session());
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 passport.serializeUser((user, done) => {
   done(null, user);
@@ -1106,6 +1180,9 @@ app.get('/api/community/posts', async (_req, res) => {
             email: true,
             subscriptionTier: true
           }
+        },
+        _count: {
+          select: { comments: true }
         }
       },
       orderBy: { createdAt: 'desc' },
@@ -1118,6 +1195,7 @@ app.get('/api/community/posts', async (_req, res) => {
       content: post.content,
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
+      imageUrl: post.imageUrl ?? null,
       author: post.user
         ? {
             id: post.user.id,
@@ -1125,7 +1203,8 @@ app.get('/api/community/posts', async (_req, res) => {
             email: post.user.email ?? null,
             subscriptionTier: post.user.subscriptionTier
           }
-        : null
+        : null,
+      commentCount: post._count.comments
     }));
 
     res.json(sanitized);
@@ -1135,24 +1214,37 @@ app.get('/api/community/posts', async (_req, res) => {
   }
 });
 
-app.post('/api/community/posts', requireAuth, async (req, res) => {
+app.post('/api/community/posts', requireAuth, uploadCommunityImageMiddleware, async (req, res) => {
+  const uploadedFilePath = req.file?.path ?? null;
   try {
     const sessionUser = req.user;
     await ensureUserRecord(sessionUser);
     const { title, content } = req.body ?? {};
 
-    if (typeof title !== 'string' || title.trim().length === 0) {
+    const trimmedTitle = typeof title === 'string' ? title.trim() : '';
+    const trimmedContent = typeof content === 'string' ? content.trim() : '';
+
+    if (trimmedTitle.length === 0) {
+      if (uploadedFilePath) {
+        await removeFileIfExists(uploadedFilePath);
+      }
       return res.status(400).json({ message: '제목을 입력해주세요.' });
     }
-    if (typeof content !== 'string' || content.trim().length === 0) {
+    if (trimmedContent.length === 0) {
+      if (uploadedFilePath) {
+        await removeFileIfExists(uploadedFilePath);
+      }
       return res.status(400).json({ message: '본문을 입력해주세요.' });
     }
+
+    const imageUrl = req.file?.filename ? buildCommunityImageUrl(req.file.filename) : null;
 
     const created = await prisma.communityPost.create({
       data: {
         userId: sessionUser.id,
-        title: title.trim().slice(0, 200),
-        content: content.trim()
+        title: trimmedTitle.slice(0, 200),
+        content: trimmedContent,
+        imageUrl
       },
       include: {
         user: {
@@ -1172,6 +1264,7 @@ app.post('/api/community/posts', requireAuth, async (req, res) => {
       content: created.content,
       createdAt: created.createdAt,
       updatedAt: created.updatedAt,
+      imageUrl: created.imageUrl ?? null,
       author: created.user
         ? {
             id: created.user.id,
@@ -1182,8 +1275,113 @@ app.post('/api/community/posts', requireAuth, async (req, res) => {
         : null
     });
   } catch (error) {
+    if (uploadedFilePath) {
+      await removeFileIfExists(uploadedFilePath);
+    }
     console.error('Failed to create community post', error);
     res.status(500).json({ message: '게시글을 등록하지 못했습니다.' });
+  }
+});
+
+app.get('/api/community/posts/:postId/comments', async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    const post = await prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!post) {
+      return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+    }
+
+    const comments = await prisma.communityComment.findMany({
+      where: { postId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            subscriptionTier: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const mapped = comments.map((comment) => ({
+      id: comment.id,
+      postId: comment.postId,
+      content: comment.content,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+      author: comment.user
+        ? {
+            id: comment.user.id,
+            displayName: comment.user.displayName ?? null,
+            email: comment.user.email ?? null,
+            subscriptionTier: comment.user.subscriptionTier
+          }
+        : null
+    }));
+
+    res.json(mapped);
+  } catch (error) {
+    console.error('Failed to read community comments', error);
+    res.status(500).json({ message: '댓글을 불러오지 못했습니다.' });
+  }
+});
+
+app.post('/api/community/posts/:postId/comments', requireAuth, async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+
+    const { content } = req.body ?? {};
+    if (typeof content !== 'string' || content.trim().length === 0) {
+      return res.status(400).json({ message: '댓글 내용을 입력해주세요.' });
+    }
+
+    const post = await prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!post) {
+      return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+    }
+
+    const created = await prisma.communityComment.create({
+      data: {
+        postId,
+        userId: sessionUser.id,
+        content: content.trim()
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            subscriptionTier: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      id: created.id,
+      postId: created.postId,
+      content: created.content,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt,
+      author: created.user
+        ? {
+            id: created.user.id,
+            displayName: created.user.displayName ?? null,
+            email: created.user.email ?? null,
+            subscriptionTier: created.user.subscriptionTier
+          }
+        : null
+    });
+  } catch (error) {
+    console.error('Failed to create community comment', error);
+    res.status(500).json({ message: '댓글을 등록하지 못했습니다.' });
   }
 });
 

@@ -13,15 +13,42 @@ export interface CommunityPost {
   content: string;
   createdAt: string;
   updatedAt: string;
+  imageUrl?: string | null;
   author: CommunityPostAuthor | null;
+  commentCount?: number;
 }
 
 export interface CreateCommunityPostPayload {
   title: string;
   content: string;
+  image?: File | null;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api';
+const API_ORIGIN = (() => {
+  try {
+    const url = new URL(API_BASE_URL);
+    return `${url.protocol}//${url.host}`;
+  } catch (_error) {
+    return 'http://localhost:4000';
+  }
+})();
+
+export const resolveCommunityImageUrl = (imagePath: string | null | undefined): string | null => {
+  if (!imagePath) {
+    return null;
+  }
+
+  try {
+    const absolute = new URL(imagePath);
+    return absolute.toString();
+  } catch (_error) {
+    // not an absolute URL
+  }
+
+  const normalized = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  return `${API_ORIGIN}${normalized}`;
+};
 
 export async function fetchCommunityPosts(): Promise<CommunityPost[]> {
   const response = await fetch(`${API_BASE_URL}/community/posts`, {
@@ -37,13 +64,17 @@ export async function fetchCommunityPosts(): Promise<CommunityPost[]> {
 }
 
 export async function createCommunityPost(payload: CreateCommunityPostPayload): Promise<CommunityPost> {
+  const formData = new FormData();
+  formData.append('title', payload.title);
+  formData.append('content', payload.content);
+  if (payload.image instanceof File) {
+    formData.append('image', payload.image);
+  }
+
   const response = await fetch(`${API_BASE_URL}/community/posts`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
     credentials: 'include',
-    body: JSON.stringify(payload)
+    body: formData
   });
 
   if (!response.ok) {

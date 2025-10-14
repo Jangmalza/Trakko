@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import HeaderNavigation from '../components/HeaderNavigation';
 import ThemeToggleButton from '../components/ThemeToggleButton';
@@ -7,14 +7,19 @@ import { useAuthStore } from '../store/authStore';
 
 const TITLE_LIMIT = 120;
 const CONTENT_LIMIT = 5000;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 const CommunityComposePage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const trimmedTitle = title.trim();
   const trimmedContent = content.trim();
@@ -28,6 +33,60 @@ const CommunityComposePage: React.FC = () => {
     return '최근 거래에서 얻은 인사이트, 질문, 전략을 자유롭게 공유해 주세요.';
   }, [user]);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
+  const handleRemoveImage = () => {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setImageFile(null);
+    setImagePreview(null);
+    setImageError(null);
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canCreate || submitting) return;
+
+    const nextFile = event.target.files?.[0];
+    if (!nextFile) {
+      handleRemoveImage();
+      return;
+    }
+
+    if (!nextFile.type.startsWith('image/')) {
+      setImageError('이미지 파일만 업로드할 수 있습니다.');
+      event.target.value = '';
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+
+    if (nextFile.size > MAX_IMAGE_SIZE) {
+      setImageError('이미지는 최대 5MB까지 업로드할 수 있습니다.');
+      event.target.value = '';
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setImageError(null);
+    setImageFile(nextFile);
+    setImagePreview(URL.createObjectURL(nextFile));
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canCreate || !formValid || submitting) return;
@@ -37,7 +96,8 @@ const CommunityComposePage: React.FC = () => {
     try {
       await createCommunityPost({
         title: trimmedTitle,
-        content: trimmedContent
+        content: trimmedContent,
+        image: imageFile
       });
       navigate('/community?submitted=1', { replace: true });
     } catch (submitError) {
@@ -94,6 +154,32 @@ const CommunityComposePage: React.FC = () => {
                 disabled={!canCreate || submitting}
               />
               <span className="text-[11px] text-slate-400 dark:text-slate-500">{content.length}/{CONTENT_LIMIT}</span>
+            </label>
+
+            <label className="flex flex-col gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">이미지 (선택)</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handleImageChange}
+                disabled={!canCreate || submitting}
+                className="text-xs text-slate-500 file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-300 dark:text-slate-400 dark:file:bg-slate-700 dark:file:text-slate-200 dark:hover:file:bg-slate-600"
+              />
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">PNG, JPG, WEBP, GIF 형식, 최대 5MB</span>
+              {imagePreview && (
+                <div className="relative mt-2 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60">
+                  <img src={imagePreview} alt="선택한 이미지 미리보기" className="h-48 w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute right-3 top-3 rounded-full bg-slate-900/80 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-900 dark:bg-slate-100/80 dark:text-slate-900 dark:hover:bg-slate-100"
+                  >
+                    이미지 제거
+                  </button>
+                </div>
+              )}
+              {imageError && <p className="text-xs text-red-500">{imageError}</p>}
             </label>
 
             <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">

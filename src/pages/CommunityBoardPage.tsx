@@ -1,19 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import HeaderNavigation from '../components/HeaderNavigation';
 import ThemeToggleButton from '../components/ThemeToggleButton';
 import { useAuthStore } from '../store/authStore';
-import { fetchCommunityPosts, type CommunityPost } from '../api/communityApi';
+import { fetchCommunityPosts, resolveCommunityImageUrl, type CommunityPost } from '../api/communityApi';
 
 const ERROR_DEFAULT = '게시글을 불러오는 중 오류가 발생했습니다.';
+const PREVIEW_LENGTH = 220;
 
 const CommunityBoardPage: React.FC = () => {
-  const { user } = useAuthStore();
+  const location = useLocation();
+  const { user, getLoginUrl } = useAuthStore();
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'mine' | 'pro'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const load = async () => {
@@ -35,6 +38,10 @@ const CommunityBoardPage: React.FC = () => {
 
   const canCreate = Boolean(user);
   const normalizedSearch = searchTerm.trim().toLowerCase();
+  const showSuccessBanner = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('submitted') === '1';
+  }, [location.search]);
 
   const filteredPosts = useMemo(() => {
     let base = posts;
@@ -75,6 +82,12 @@ const CommunityBoardPage: React.FC = () => {
           </p>
         </header>
 
+        {showSuccessBanner && (
+          <div className="mt-4 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+            게시글이 성공적으로 등록되었습니다.
+          </div>
+        )}
+
         {error && (
           <div className="mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600 dark:border-red-400/40 dark:bg-red-500/10 dark:text-red-200">
             {error}
@@ -85,16 +98,24 @@ const CommunityBoardPage: React.FC = () => {
           <div className="flex-1">
             {canCreate ? '새로운 거래 경험이나 궁금한 점을 공유해 보세요.' : '로그인 후 게시글을 작성할 수 있습니다.'}
           </div>
-          <Link
-            to={canCreate ? '/community/new' : '/community'}
-            className={`inline-flex items-center gap-2 rounded px-4 py-2 font-semibold transition ${
-              canCreate
-                ? 'bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200'
-                : 'cursor-not-allowed border border-slate-300 text-slate-400 dark:border-slate-700 dark:text-slate-500'
-            }`}
-          >
-            새 게시글 작성하기
-          </Link>
+          {canCreate ? (
+            <Link
+              to="/community/new"
+              className="inline-flex items-center gap-2 rounded bg-slate-900 px-4 py-2 font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+            >
+              새 게시글 작성하기
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = getLoginUrl();
+              }}
+              className="inline-flex items-center gap-2 rounded border border-slate-300 px-4 py-2 font-semibold text-slate-500 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-500 dark:hover:text-slate-100"
+            >
+              로그인하고 작성하기
+            </button>
+          )}
         </div>
 
         <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-6 py-6 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
@@ -160,31 +181,83 @@ const CommunityBoardPage: React.FC = () => {
             </div>
           ) : (
             <ul className="space-y-4">
-              {filteredPosts.map((post) => (
-                <li key={post.id} className="rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-700 shadow-sm transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">{post.title}</h3>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
-                        <span>{new Date(post.createdAt).toLocaleString()}</span>
-                        {post.author?.subscriptionTier === 'PRO' && (
-                          <span className="inline-flex items-center rounded-full border border-emerald-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500 dark:border-emerald-300 dark:text-emerald-200">
-                            Pro
-                          </span>
-                        )}
+              {filteredPosts.map((post) => {
+                const isExpanded = expandedIds.has(post.id);
+                const preview =
+                  post.content.length > PREVIEW_LENGTH && !isExpanded
+                    ? `${post.content.slice(0, PREVIEW_LENGTH)}…`
+                    : post.content;
+                const imageUrl = resolveCommunityImageUrl(post.imageUrl ?? null);
+
+                return (
+                  <li
+                    key={post.id}
+                    className="rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-700 shadow-sm transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <Link to={`/community/${post.id}`} className="text-base font-semibold text-slate-900 dark:text-slate-100 hover:underline">
+                          {post.title}
+                        </Link>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                          <span>{new Date(post.createdAt).toLocaleString()}</span>
+                          {post.author?.subscriptionTier === 'PRO' && (
+                            <span className="inline-flex items-center rounded-full border border-emerald-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500 dark:border-emerald-300 dark:text-emerald-200">
+                              Pro
+                            </span>
+                          )}
+                        </div>
                       </div>
+                      {imageUrl && (
+                        <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60">
+                          <img
+                            src={imageUrl}
+                            alt={`${post.title} 첨부 이미지`}
+                            className="h-44 w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+                      <p
+                        className={`whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-slate-200${imageUrl ? ' mt-3' : ''}`}
+                      >
+                        {preview}
+                      </p>
+                      {post.content.length > PREVIEW_LENGTH && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(post.id)) {
+                                next.delete(post.id);
+                              } else {
+                                next.add(post.id);
+                              }
+                              return next;
+                            })
+                          }
+                          className="mt-2 w-max text-xs font-semibold text-blue-500 transition hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
+                        >
+                          {isExpanded ? '접기' : '전체 보기'}
+                        </button>
+                      )}
                     </div>
-                    <p className="whitespace-pre-line text-sm leading-6 text-slate-700 dark:text-slate-200">{post.content}</p>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
-                    <span>
-                      {post.author
-                        ? `${post.author.displayName ?? post.author.email ?? '회원'} · ${post.author.subscriptionTier === 'PRO' ? 'Pro' : 'Free'}`
-                        : '탈퇴한 사용자'}
-                    </span>
-                  </div>
-                </li>
-              ))}
+                    <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
+                      <span>
+                        {post.author
+                          ? `${post.author.displayName ?? post.author.email ?? '회원'} · ${
+                              post.author.subscriptionTier === 'PRO' ? 'Pro' : 'Free'
+                            }`
+                          : '탈퇴한 사용자'}
+                      </span>
+                      <Link to={`/community/${post.id}`} className="hover:underline">
+                        댓글 {post.commentCount ?? 0}
+                      </Link>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
