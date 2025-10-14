@@ -6,6 +6,7 @@ import ThemeToggleButton from '../components/ThemeToggleButton';
 import TradeEntriesList from '../components/TradeEntriesList';
 import InlineDatePicker from '../components/InlineDatePicker';
 import { usePortfolioStore } from '../store/portfolioStore';
+import { useAuthStore } from '../store/authStore';
 
 const PAGE_TITLE = '거래 기록';
 const PAGE_SUBTITLE = '모든 거래 내역을 한 곳에서 확인하고 수정하거나 삭제할 수 있습니다.';
@@ -17,8 +18,12 @@ const SELECTED_DATE_LABEL = '선택한 날짜';
 const CLEAR_SELECTION_LABEL = '전체 보기';
 const NO_TRADES_FOR_DATE = '선택한 날짜에 기록된 거래가 없습니다.';
 
+const THREE_MONTH_LIMIT_MESSAGE = '무료 사용자에게는 최근 3개월 거래 내역만 표시됩니다.';
+
 const TradesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isProUser = user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO';
   const [selectedDate, setSelectedDate] = useState('');
   const {
     initialSeed,
@@ -44,10 +49,30 @@ const TradesPage: React.FC = () => {
     }
   }, [hasLoaded, loading, loadPortfolio]);
 
-  const filteredTrades = useMemo(
+  const dateFilteredTrades = useMemo(
     () => (selectedDate ? trades.filter((trade) => trade.tradeDate === selectedDate) : trades),
     [selectedDate, trades]
   );
+
+  const visibilityFilteredTrades = useMemo(() => {
+    if (isProUser) return dateFilteredTrades;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    cutoff.setHours(0, 0, 0, 0);
+    return dateFilteredTrades.filter((trade) => new Date(`${trade.tradeDate}T00:00:00`) >= cutoff);
+  }, [dateFilteredTrades, isProUser]);
+
+  const adjustedInitialSeed = useMemo(() => {
+    if (initialSeed === null) return null;
+    if (isProUser) return initialSeed;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    cutoff.setHours(0, 0, 0, 0);
+    const priorPnL = trades
+      .filter((trade) => new Date(`${trade.tradeDate}T00:00:00`) < cutoff)
+      .reduce((acc, trade) => acc + trade.profitLoss, 0);
+    return initialSeed + priorPnL;
+  }, [initialSeed, trades, isProUser]);
 
   const handleCalendarChange = (nextDate: string) => {
     setSelectedDate((current) => (current === nextDate ? '' : nextDate));
@@ -67,6 +92,33 @@ const TradesPage: React.FC = () => {
       return selectedDate;
     }
   }, [selectedDate]);
+
+  const handleExportCsv = () => {
+    if (!isProUser || trades.length === 0) return;
+    const escape = (value: unknown) => {
+      if (value === null || value === undefined) return '""';
+      const stringValue = String(value).replace(/"/g, '""');
+      return `"${stringValue}"`;
+    };
+    const rows = trades.map((trade) => [
+      trade.tradeDate,
+      trade.ticker,
+      trade.profitLoss,
+      trade.currency ?? '',
+      trade.entryRationale ?? '',
+      trade.exitRationale ?? '',
+      trade.rationale ?? ''
+    ].map(escape).join(','));
+    const header = 'Date,Ticker,Profit/Loss,Currency,Entry Rationale,Exit Rationale,Notes';
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `trakko-trades-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const showLoading = !hasLoaded || loading;
   const needsOnboarding = hasLoaded && initialSeed === null;
@@ -125,7 +177,7 @@ const TradesPage: React.FC = () => {
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                   <span>
                     {selectedDate
-                      ? `${SELECTED_DATE_LABEL}: ${formattedSelectedDate} (${filteredTrades.length}건)`
+                      ? `${SELECTED_DATE_LABEL}: ${formattedSelectedDate} (${visibilityFilteredTrades.length}건)`
                       : '전체 거래가 표시됩니다.'}
                   </span>
                   {selectedDate && (
@@ -138,11 +190,25 @@ const TradesPage: React.FC = () => {
                     </button>
                   )}
                 </div>
+                {!isProUser && (
+                  <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                    {THREE_MONTH_LIMIT_MESSAGE}
+                  </div>
+                )}
+                {isProUser && trades.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    className="w-full rounded border border-blue-500 px-3 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
+                  >
+                    CSV 다운로드
+                  </button>
+                )}
               </aside>
               <section>
                 <TradeEntriesList
-                  initialSeed={initialSeed}
-                  trades={filteredTrades}
+                  initialSeed={(adjustedInitialSeed ?? initialSeed)!}
+                  trades={visibilityFilteredTrades}
                   emptyMessage={selectedDate ? NO_TRADES_FOR_DATE : undefined}
                 />
               </section>

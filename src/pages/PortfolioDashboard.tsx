@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import TradeEntryForm from '../components/TradeEntryForm';
 import SeedOverviewChart from '../components/SeedOverviewChart';
 import TradeEntriesList from '../components/TradeEntriesList';
@@ -10,9 +10,6 @@ import GoalProgressCard from '../components/GoalProgressCard';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useAuthStore } from '../store/authStore';
 import { useShallow } from 'zustand/react/shallow';
-import CryptoHighlights from '../components/traderHighlights/CryptoHighlights';
-import UsStockHighlights from '../components/traderHighlights/UsStockHighlights';
-import KrStockHighlights from '../components/traderHighlights/KrStockHighlights';
 
 const DASHBOARD_TITLE = '일일 자본 트래커';
 const DASHBOARD_SUBTITLE = '각 거래가 전체 자본에 미치는 영향을 기록하고, 결정의 근거를 남겨 다음 전략에 반영하세요.';
@@ -34,8 +31,7 @@ const PortfolioDashboard: React.FC = () => {
     clearError,
     hasLoaded,
     performanceGoal,
-    goalLoading,
-    traderType
+    goalLoading
   } = usePortfolioStore(useShallow((state) => ({
     initialSeed: state.initialSeed,
     trades: state.trades,
@@ -46,11 +42,11 @@ const PortfolioDashboard: React.FC = () => {
     clearError: state.clearError,
     hasLoaded: state.hasLoaded,
     performanceGoal: state.performanceGoal,
-    goalLoading: state.goalLoading,
-    traderType: state.traderType
+    goalLoading: state.goalLoading
   }))); 
   const { user } = useAuthStore();
-  const isAdFreeUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
+  const isProUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
+  const isAdFreeUser = isProUser;
   const [tradeSavedPromoVisible, setTradeSavedPromoVisible] = useState(false);
 
   useEffect(() => {
@@ -99,17 +95,30 @@ const PortfolioDashboard: React.FC = () => {
 
   const showPlaceholder = !hasLoaded || initialSeed === null;
 
-  const renderTraderHighlights = () => {
-    switch (traderType) {
-      case 'CRYPTO':
-        return <CryptoHighlights />;
-      case 'US_STOCK':
-        return <UsStockHighlights />;
-      case 'KR_STOCK':
-      default:
-        return <KrStockHighlights />;
+  const filteredTrades = useMemo(() => {
+    if (isProUser) {
+      return trades;
     }
-  };
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    cutoff.setHours(0, 0, 0, 0);
+    return trades.filter((trade) => {
+      const tradeDate = new Date(`${trade.tradeDate}T00:00:00`);
+      return tradeDate >= cutoff;
+    });
+  }, [trades, isProUser]);
+
+  const adjustedInitialSeed = useMemo(() => {
+    if (initialSeed === null) return null;
+    if (isProUser) return initialSeed;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    cutoff.setHours(0, 0, 0, 0);
+    const priorPnL = trades
+      .filter((trade) => new Date(`${trade.tradeDate}T00:00:00`) < cutoff)
+      .reduce((acc, trade) => acc + trade.profitLoss, 0);
+    return initialSeed + priorPnL;
+  }, [initialSeed, trades, isProUser]);
 
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -151,10 +160,20 @@ const PortfolioDashboard: React.FC = () => {
                 </section>
               )}
               {performanceGoal && (
-                <GoalProgressCard summary={performanceGoal} loading={goalLoading} />
+                <GoalProgressCard summary={performanceGoal} loading={goalLoading} showAnnual={isProUser} />
               )}
-              <SeedOverviewChart initialSeed={initialSeed} trades={trades} />
-              {renderTraderHighlights()}
+              <SeedOverviewChart initialSeed={(adjustedInitialSeed ?? initialSeed)!} trades={filteredTrades} />
+              {!isProUser && (
+                <section className="rounded-xl border border-slate-200 bg-slate-50 px-6 py-4 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
+                  <p>무료 사용자에게는 최근 3개월 거래 내역만 표시됩니다. 전체 히스토리와 확장 기능은 Pro에서 이용할 수 있어요.</p>
+                  <Link
+                    to="/settings"
+                    className="mt-2 inline-flex w-max items-center gap-2 rounded-full border border-blue-500 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
+                  >
+                    Pro 업그레이드 알아보기
+                  </Link>
+                </section>
+              )}
               {!isAdFreeUser && (
                 <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -191,7 +210,7 @@ const PortfolioDashboard: React.FC = () => {
                   </div>
                 </section>
               )}
-              <TradeEntriesList initialSeed={initialSeed} trades={trades} />
+              <TradeEntriesList initialSeed={(adjustedInitialSeed ?? initialSeed)!} trades={filteredTrades} />
             </div>
           </main>
         )}

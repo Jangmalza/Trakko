@@ -56,6 +56,7 @@ const SettingsPage: React.FC = () => {
     clearError: state.clearError
   })));
   const { user, getLoginUrl, setTraderType: setUserTraderType } = useAuthStore();
+  const isProUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
   const {
     currency,
     loading: preferencesLoading,
@@ -448,91 +449,107 @@ const SettingsPage: React.FC = () => {
                 </dl>
               </article>
 
-              <article className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
-                <header className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">연간 목표</p>
-                    <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">{annualDisplayLabel}</h3>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                      연간 목표를 설정하면 장기 전략의 진척도를 한눈에 확인할 수 있습니다.
-                    </p>
-                  </div>
-                </header>
+              {isProUser ? (
+                <article className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900/40">
+                  <header className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">연간 목표</p>
+                      <h3 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">{annualDisplayLabel}</h3>
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                        연간 목표를 설정하면 장기 전략의 진척도를 한눈에 확인할 수 있습니다.
+                      </p>
+                    </div>
+                  </header>
 
-                <form onSubmit={handleAnnualGoalSubmit} className="mt-4 space-y-3">
-                  <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    목표 금액 ({currency})
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={annualGoalInput}
-                      onChange={(event) => {
-                        const value = event.target.value.replace(/[^0-9.,]/g, '');
-                        setAnnualGoalTouched(true);
-                        setAnnualGoalInput(value);
-                        if (goalError) {
-                          clearPortfolioError();
-                        }
-                      }}
-                      onBlur={() => setAnnualGoalTouched(true)}
-                      placeholder="예: 20,000,000"
-                      disabled={goalActionsDisabled}
-                      className="w-full rounded border border-slate-300 px-3 py-2 text-base text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-800"
-                    />
-                  </label>
-
-                  {annualGoalTouched && !annualGoalValid && (
-                    <p className="text-xs text-red-500">양의 숫자를 입력해주세요.</p>
-                  )}
-
-                  {goalError && annualGoalTouched && (
-                    <p className="text-xs text-red-500">{goalError}</p>
-                  )}
-
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="submit"
-                      disabled={goalActionsDisabled || !annualGoalValid}
-                      className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition disabled:bg-slate-300 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-                    >
-                      {goalLoading ? '저장 중...' : annualSummary?.goal ? '연간 목표 업데이트' : '연간 목표 저장'}
-                    </button>
-                    {annualSummary?.goal && (
-                      <button
-                        type="button"
-                        onClick={handleAnnualGoalDelete}
+                  <form onSubmit={handleAnnualGoalSubmit} className="mt-4 space-y-3">
+                    <label className="flex flex-col gap-2 text-sm font_medium text-slate-700 dark:text-slate-300">
+                      목표 금액 ({currency})
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={annualGoalInput}
+                        onChange={(event) => {
+                          const value = event.target.value.replace(/[^0-9.,]/g, '');
+                          setAnnualGoalTouched(true);
+                          setAnnualGoalInput(value);
+                          if (goalError) {
+                            clearPortfolioError();
+                          }
+                        }}
+                        onBlur={() => setAnnualGoalTouched(true)}
+                        placeholder="예: 20,000,000"
                         disabled={goalActionsDisabled}
-                        className="inline-flex items-center justify-center rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 dark:border-red-400/40 dark:text-red-300 dark:hover:bg-red-500/10 dark:disabled:border-slate-700 dark:disabled:text-slate-600"
-                      >
-                        연간 목표 삭제
-                      </button>
-                    )}
-                  </div>
-                </form>
+                        className="w-full rounded border border-slate-300 px-3 py-2 text-base text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-800"
+                      />
+                    </label>
 
-                <dl className="mt-5 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  <div className="flex items-center justify-between">
-                    <dt>목표 금액</dt>
-                    <dd>{annualSummary?.goal ? formatCurrency(annualSummary.goal.targetAmount) : '—'}</dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt>누적 손익</dt>
-                    <dd>{formatCurrency(annualSummary?.achievedAmount ?? 0)}</dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt>남은 금액</dt>
-                    <dd>
-                      {annualSummary?.goal && annualSummary.remainingAmount !== null
-                        ? formatCurrency(annualSummary.remainingAmount)
-                        : '—'}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt>달성률</dt>
-                    <dd>{annualProgressText}</dd>
-                  </div>
-                </dl>
-              </article>
+                    {annualGoalTouched && !annualGoalValid && (
+                      <p className="text-xs text-red-500">양의 숫자를 입력해주세요.</p>
+                    )}
+
+                    {goalError && annualGoalTouched && (
+                      <p className="text-xs text-red-500">{goalError}</p>
+                    )}
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="submit"
+                        disabled={goalActionsDisabled || !annualGoalValid}
+                        className="inline-flex items-center justify-center rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition disabled:bg-slate-300 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+                      >
+                        {goalLoading ? '저장 중...' : annualSummary?.goal ? '연간 목표 업데이트' : '연간 목표 저장'}
+                      </button>
+                      {annualSummary?.goal && (
+                        <button
+                          type="button"
+                          onClick={handleAnnualGoalDelete}
+                          disabled={goalActionsDisabled}
+                          className="inline-flex items-center justify-center rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300 dark:border-red-400/40 dark:text-red-300 dark:hover:bg-red-500/10 dark:disabled:border-slate-700 dark:disabled:text-slate-600"
+                        >
+                          연간 목표 삭제
+                        </button>
+                      )}
+                    </div>
+                  </form>
+
+                  <dl className="mt-5 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                    <div className="flex items-center justify-between">
+                      <dt>목표 금액</dt>
+                      <dd>{annualSummary?.goal ? formatCurrency(annualSummary.goal.targetAmount) : '—'}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt>누적 손익</dt>
+                      <dd>{formatCurrency(annualSummary?.achievedAmount ?? 0)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt>남은 금액</dt>
+                      <dd>
+                        {annualSummary?.goal && annualSummary.remainingAmount !== null
+                          ? formatCurrency(annualSummary.remainingAmount)
+                          : '—'}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt>달성률</dt>
+                      <dd>{annualProgressText}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ) : (
+                <article className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-5 text-xs text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">연간 목표는 Pro 전용 기능입니다</h3>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    연간 목표와 장기 성과 트래킹은 Pro 구독으로 이용하실 수 있습니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/settings', { replace: false })}
+                    className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-500 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
+                  >
+                    Pro 업그레이드 알아보기
+                  </button>
+                </article>
+              )}
             </div>
 
             {!user && (

@@ -6,6 +6,7 @@ import { formatCurrency } from '../utils/formatCurrency';
 interface GoalProgressCardProps {
   summary: PerformanceGoalSummary | null;
   loading?: boolean;
+  showAnnual?: boolean;
 }
 
 type GoalCopy = {
@@ -123,7 +124,7 @@ const renderGoalSection = (section: GoalProgressSummary, loading: boolean) => {
   );
 };
 
-const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ summary, loading = false }) => {
+const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ summary, loading = false, showAnnual = true }) => {
   if (!summary) {
     return null;
   }
@@ -145,7 +146,25 @@ const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ summary, loading = 
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         {renderGoalSection(summary.monthly, loading)}
-        {renderGoalSection(summary.annual, loading)}
+        {showAnnual ? (
+          renderGoalSection(summary.annual, loading)
+        ) : (
+          <article className="flex h-full flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Annual Goal</p>
+              <h3 className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">연간 목표는 Pro에서 제공됩니다</h3>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                장기 성과를 추적하고 누적 손익을 관리하려면 Pro 구독으로 업그레이드해 주세요.
+              </p>
+            </div>
+            <Link
+              to="/settings"
+              className="mt-3 inline-flex w-max items-center gap-1 rounded-full border border-blue-500 px-3 py-1 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
+            >
+              Pro 업그레이드
+            </Link>
+          </article>
+        )}
       </div>
     </section>
   );
