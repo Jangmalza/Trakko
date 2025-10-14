@@ -8,6 +8,7 @@ import SettingsPage from './pages/SettingsPage.tsx';
 import AuthCallback from './pages/AuthCallback.tsx';
 import AnnouncementsPage from './pages/AnnouncementsPage.tsx';
 import TradesPage from './pages/TradesPage.tsx';
+import SubscriptionStatusPage from './pages/SubscriptionStatusPage.tsx';
 import { useAuthBootstrap } from './hooks/useAuthBootstrap.ts';
 import { useThemeStore } from './store/themeStore.ts';
 
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
   { path: '/dashboard', element: <PortfolioDashboard /> },
   { path: '/trades', element: <TradesPage /> },
   { path: '/settings', element: <SettingsPage /> },
+  { path: '/subscription', element: <SubscriptionStatusPage /> },
   { path: '/announcements', element: <AnnouncementsPage /> },
   { path: '/auth/callback', element: <AuthCallback /> },
   { path: '*', element: <Navigate to="/" replace /> }

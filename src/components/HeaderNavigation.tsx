@@ -6,6 +6,7 @@ import MiniMarketTicker from './MiniMarketTicker';
 const HeaderNavigation: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout, getLoginUrl } = useAuthStore();
+  const isProUser = user?.subscriptionTier === 'PRO' || user?.role === 'ADMIN';
 
   const handleLogin = () => {
     window.location.href = getLoginUrl();
@@ -35,12 +36,22 @@ const HeaderNavigation: React.FC = () => {
           <Link to="/announcements" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
             공지사항
           </Link>
+          <Link to="/subscription" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
+            구독
+          </Link>
           <Link to="/settings" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
             설정
           </Link>
           {user ? (
             <>
-              <span className="hidden text-slate-500 dark:text-slate-300 sm:inline">{user.displayName || user.email}</span>
+              <span className="hidden items-center gap-2 text-slate-500 dark:text-slate-300 sm:inline sm:flex">
+                {user.displayName || user.email}
+                {isProUser && (
+                  <span className="inline-flex items-center rounded-full border border-emerald-400 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500 dark:border-emerald-300 dark:text-emerald-200">
+                    Pro
+                  </span>
+                )}
+              </span>
               <button
                 type="button"
                 onClick={handleLogout}
