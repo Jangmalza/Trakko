@@ -36,6 +36,9 @@ const HeaderNavigation: React.FC = () => {
           <Link to="/announcements" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
             공지사항
           </Link>
+          <Link to="/community" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
+            커뮤니티
+          </Link>
           <Link to="/subscription" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
             구독
           </Link>
