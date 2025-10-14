@@ -22,6 +22,7 @@ model User {
   role         UserRole    @default(USER)
   subscriptionTier SubscriptionTier @default(FREE)
   announcements Announcement[]
+  communityPosts CommunityPost[] @relation("UserCommunityPosts")
 }
 
 model Preference {
@@ -57,6 +58,16 @@ model PerformanceGoal {
   user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, period, targetYear, targetMonth])
+}
+
+model CommunityPost {
+  id        String   @id @default(cuid())
+  userId    String?
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User?    @relation("UserCommunityPosts", fields: [userId], references: [id], onDelete: SetNull)
 }
 
 enum UserRole {

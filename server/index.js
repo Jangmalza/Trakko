@@ -1095,6 +1095,98 @@ app.post('/api/portfolio/reset', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/community/posts', async (_req, res) => {
+  try {
+    const posts = await prisma.communityPost.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            subscriptionTier: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    const sanitized = posts.map((post) => ({
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      author: post.user
+        ? {
+            id: post.user.id,
+            displayName: post.user.displayName ?? null,
+            email: post.user.email ?? null,
+            subscriptionTier: post.user.subscriptionTier
+          }
+        : null
+    }));
+
+    res.json(sanitized);
+  } catch (error) {
+    console.error('Failed to read community posts', error);
+    res.status(500).json({ message: '커뮤니티 게시글을 불러오지 못했습니다.' });
+  }
+});
+
+app.post('/api/community/posts', requireAuth, async (req, res) => {
+  try {
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+    const { title, content } = req.body ?? {};
+
+    if (typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ message: '제목을 입력해주세요.' });
+    }
+    if (typeof content !== 'string' || content.trim().length === 0) {
+      return res.status(400).json({ message: '본문을 입력해주세요.' });
+    }
+
+    const created = await prisma.communityPost.create({
+      data: {
+        userId: sessionUser.id,
+        title: title.trim().slice(0, 200),
+        content: content.trim()
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            subscriptionTier: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      id: created.id,
+      title: created.title,
+      content: created.content,
+      createdAt: created.createdAt,
+      updatedAt: created.updatedAt,
+      author: created.user
+        ? {
+            id: created.user.id,
+            displayName: created.user.displayName ?? null,
+            email: created.user.email ?? null,
+            subscriptionTier: created.user.subscriptionTier
+          }
+        : null
+    });
+  } catch (error) {
+    console.error('Failed to create community post', error);
+    res.status(500).json({ message: '게시글을 등록하지 못했습니다.' });
+  }
+});
+
 app.post('/api/profile/trader-type', requireAuth, async (req, res) => {
   try {
     const { traderType } = req.body ?? {};
