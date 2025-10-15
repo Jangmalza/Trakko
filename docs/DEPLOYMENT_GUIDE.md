@@ -206,7 +206,34 @@ sudo certbot --nginx -d api.your-domain -d your-domain
   pm2 status                                         # 전체 프로세스 상태
   pm2 save                                           # 현재 프로세스 목록 저장
   pm2 startup                                        # 부팅 시 자동 실행 등록
-  ```
+ ```
+
+## 18. 브랜치 운영 전략
+1. **브랜치 분리**: 개발은 `develop`, 운영은 `main` 브랜치로 관리합니다. `develop`에서 기능을 완성하고 테스트한 뒤 `main`에 병합합니다.
+2. **개발 → 운영 병합 절차**
+   ```bash
+   # 개발 리포 (~/Trakko-dev)
+   git checkout develop
+   git pull origin develop
+   # 테스트 완료 후 운영 반영
+   git checkout main
+   git pull origin main
+   git merge develop
+   git push origin main
+   # 작업 이어가기 위해 다시 develop으로 이동
+   git checkout develop
+   ```
+3. **운영 리포 배포**: 운영 디렉터리(`~/Trakko-prod`)에서 최신 main을 받아 배포합니다.
+   ```bash
+   cd ~/Trakko-prod
+   git checkout main
+   git pull origin main
+   npm install
+   pm2 reload trakko-prod
+   pm2 restart trakko-frontend-prod
+   ```
+4. **릴리스 태그**: 운영 배포마다 `git tag v1.2.3 && git push origin v1.2.3` 형태로 태그를 남기면 롤백이 쉬워집니다.
+
 
 ## 17. 운영 배포 절차
 1. **코드 검증**  
