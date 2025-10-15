@@ -234,6 +234,8 @@ sudo certbot --nginx -d api.your-domain -d your-domain
    ```
 4. **릴리스 태그**: 운영 배포마다 `git tag v1.2.3 && git push origin v1.2.3` 형태로 태그를 남기면 롤백이 쉬워집니다.
 
+> 더 자세한 브랜치 운영 및 배포 체크리스트는 `docs/RELEASE_WORKFLOW.md` 문서를 참고하세요.
+
 
 ## 17. 운영 배포 절차
 1. **코드 검증**  
