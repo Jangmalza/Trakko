@@ -14,7 +14,7 @@ import { useShallow } from 'zustand/react/shallow';
 const DASHBOARD_TITLE = '일일 자본 트래커';
 const DASHBOARD_SUBTITLE = '각 거래가 전체 자본에 미치는 영향을 기록하고, 결정의 근거를 남겨 다음 전략에 반영하세요.';
 const ERROR_CLOSE_LABEL = '닫기';
-const LOADING_MESSAGE = '데이터를 불러오는 중입니다...';
+const LOADING_MESSAGE = '데이터를 불러오는 중입니다. 잠시만 기다려주세요.';
 
 const PortfolioDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -125,14 +125,34 @@ const PortfolioDashboard: React.FC = () => {
         </header>
 
         {error && (
-          <div className="mt-8 flex items-start justify-between rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-400/40 dark:bg-red-500/10 dark:text-red-300">
-            <span>{error}</span>
-            <button type="button" onClick={clearError} className="text-xs underline">{ERROR_CLOSE_LABEL}</button>
+          <div
+            className="mt-8 flex items-center justify-between gap-4 rounded border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700 shadow-sm dark:border-red-400/40 dark:bg-red-500/10 dark:text-red-200"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white dark:bg-red-400">!</span>
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={clearError}
+              className="text-xs font-semibold text-red-600 underline transition hover:text-red-800 dark:text-red-200 dark:hover:text-red-100"
+            >
+              {ERROR_CLOSE_LABEL}
+            </button>
           </div>
         )}
 
         {showPlaceholder ? (
-          <div className="mt-16 text-sm text-slate-500 dark:text-slate-300">{LOADING_MESSAGE}</div>
+          <div className="mt-16 flex flex-col items-center gap-3 text-sm text-slate-500 dark:text-slate-300" role="status" aria-live="polite">
+            <span
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border-2 border-slate-200 border-t-slate-500 dark:border-slate-700 dark:border-t-slate-200"
+            >
+              <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-transparent dark:border-slate-500" aria-hidden="true" />
+            </span>
+            <p>{LOADING_MESSAGE}</p>
+          </div>
         ) : (
           <main className="mt-10 grid gap-10 lg:grid-cols-[320px_1fr]">
             <TradeEntryForm onSubmit={handleAddTrade} loading={loading} />
