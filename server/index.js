@@ -134,7 +134,11 @@ const mapCommunityPostForResponse = (post) => ({
   commentCount: typeof post._count?.comments === 'number' ? post._count.comments : undefined
 });
 
-dotenv.config({ path: path.join(__dirname, '.env') });
+const envFilePath = process.env.SERVER_ENV_FILE
+  ? path.resolve(process.env.SERVER_ENV_FILE)
+  : path.join(__dirname, '.env');
+
+dotenv.config({ path: envFilePath });
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;

@@ -129,3 +129,84 @@ sudo certbot --nginx -d api.your-domain -d your-domain
 - DB 백업 주기, Prisma 마이그레이션 절차, 장애 대응 연락처를 문서화해 팀이 공유하도록 합니다.
 - Sentry, LogRocket 등 모니터링 도구를 연동하고 핵심 지표를 설정합니다.
 - 스테이징에서 운영으로 이어지는 배포 파이프라인과 롤백 절차를 정립해 일관된 릴리스를 보장합니다.
+
+## 16. 개발/운영 환경 분리 가이드
+- `ecosystem.config.cjs`로 PM2 프로세스를 `trakko-dev`, `trakko-prod` 두 개로 나누고, 각 프로세스에 `NODE_ENV`, `SERVER_ENV_FILE` 등 환경 변수를 분리 설정합니다. 개발용은 `watch` 옵션을 켜고, 운영용은 꺼둡니다. 예시는 아래와 같습니다.
+  ```js
+  module.exports = {
+    apps: [
+      {
+        name: 'trakko-dev',
+        script: 'server/index.js',
+        watch: true,
+        ignore_watch: ['dist', 'node_modules', 'uploads'],
+        env: {
+          NODE_ENV: 'development',
+          SERVER_ENV_FILE: 'server/.env.development'
+        }
+      },
+      {
+        name: 'trakko-frontend-dev',
+        script: 'npm',
+        args: 'run dev -- --host --port 5173',
+        cwd: __dirname,
+        watch: false,
+        env: {
+          NODE_ENV: 'development'
+        }
+      },
+      {
+        name: 'trakko-prod',
+        script: 'server/index.js',
+        watch: false,
+        env: {
+          NODE_ENV: 'production',
+          SERVER_ENV_FILE: 'server/.env.production'
+        }
+      },
+      {
+        name: 'trakko-frontend-prod',
+        script: 'npm',
+        args: 'run preview -- --host --port 4173',
+        cwd: __dirname,
+        watch: false,
+        env: {
+          NODE_ENV: 'production'
+        }
+      }
+    ]
+  };
+  ```
+- `server/.env.development`, `server/.env.production`처럼 환경 전용 dotenv 파일을 준비하고, 운영 비밀키와 DB 접속 정보를 구분 보관합니다. 노출 방지를 위해 Git에 커밋하지 마세요.
+- Prisma 마이그레이션은 개발 DB에는 `prisma migrate dev`, 운영 DB에는 `prisma migrate deploy`로 별도로 적용합니다. 운영 반영 전에는 반드시 백업 스냅샷을 생성하세요.
+- 각 환경이 서로 다른 MySQL 인스턴스(혹은 최소한 별도 스키마)를 바라보도록 `DATABASE_URL` 값을 분리해 데이터 오염을 방지합니다.
+- PM2 실행 예시:
+  ```bash
+  pm2 start ecosystem.config.cjs --only trakko-dev           # 개발 백엔드 기동
+  pm2 start ecosystem.config.cjs --only trakko-frontend-dev  # 개발 프런트 기동
+  pm2 start ecosystem.config.cjs --only trakko-prod          # 운영 백엔드 기동
+  pm2 start ecosystem.config.cjs --only trakko-frontend-prod # 운영 프런트(프리뷰) 기동
+  pm2 restart trakko-dev                                     # 개발 백엔드 재시작
+  pm2 restart trakko-frontend-dev                            # 개발 프런트 재시작
+  pm2 reload trakko-prod                                     # 운영 백엔드 무중단 재시작
+  pm2 restart trakko-frontend-prod                           # 운영 프런트 재시작
+  pm2 logs trakko-dev                                        # 개발 백엔드 로그
+  pm2 logs trakko-frontend-dev                               # 개발 프런트 로그
+  pm2 logs trakko-prod                                       # 운영 백엔드 로그
+  pm2 logs trakko-frontend-prod                              # 운영 프런트 로그
+  pm2 setenv trakko-prod SERVER_ENV_FILE server/.env.production
+  pm2 unsetenv trakko-prod SERVER_ENV_FILE           # 필요 시 해제
+  pm2 status                                         # 전체 프로세스 상태
+  pm2 save                                           # 현재 프로세스 목록 저장
+  pm2 startup                                        # 부팅 시 자동 실행 등록
+  ```
+
+## 17. 운영 배포 절차
+1. **코드 검증**  
+   개발 환경에서 최신 코드를 반영한 뒤 `npm run lint`, `npm run build`, 주요 사용자 플로우 테스트를 진행합니다. Prisma 스키마가 변경됐다면 개발 DB에서 `prisma migrate dev`로 먼저 검증합니다.
+2. **운영 준비**  
+   운영 DB 백업 스냅샷을 생성하고 `prisma migrate deploy`로 스키마를 반영합니다. `server/.env.production`에 버전에 맞는 환경 변수(포트, 세션 키, OpenAI·OAuth 키, 운영 DB URL 등)를 갱신합니다. 프런트 정적 자산은 `npm run build` 후 배포 대상 스토리지(Nginx 정적 경로, S3 등)에 업로드합니다.
+3. **PM2 배포**  
+   운영 서버에서 코드를 pull 한 뒤 `npm install`을 실행합니다. `pm2 reload trakko-prod` (최초라면 `pm2 start ecosystem.config.cjs --only trakko-prod`)로 새 버전을 기동하고, `SERVER_ENV_FILE=server/.env.production`이 적용됐는지 확인합니다. 필요한 경우 `pm2 setenv trakko-prod SERVER_ENV_FILE server/.env.production`으로 재설정 후 reload 합니다.
+4. **검증 및 모니터링**  
+   라이브 사이트에서 로그인, 거래 관리, 커뮤니티, 미니 지수 등 핵심 기능을 수동 점검합니다. `pm2 logs trakko-prod` 및 모니터링 도구 알림을 확인하고 오류가 없음을 확신한 뒤 `pm2 save`로 프로세스 목록을 저장합니다. 문제가 발생하면 git revert 또는 이전 릴리스로 돌아간 뒤 `pm2 reload trakko-prod`로 롤백합니다.
