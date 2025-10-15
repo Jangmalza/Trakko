@@ -46,8 +46,7 @@ const PortfolioDashboard: React.FC = () => {
   }))); 
   const { user } = useAuthStore();
   const isProUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
-  const isAdFreeUser = isProUser;
-  const [tradeSavedPromoVisible, setTradeSavedPromoVisible] = useState(false);
+  const [tradeSavedNoticeVisible, setTradeSavedNoticeVisible] = useState(false);
 
   useEffect(() => {
     if (loadRequestedRef.current) return;
@@ -69,25 +68,21 @@ const PortfolioDashboard: React.FC = () => {
     };
   }, []);
 
-  const showTradePromo = () => {
-    if (isAdFreeUser) {
-      return;
-    }
-
-    setTradeSavedPromoVisible(true);
+  const showTradeSavedNotice = () => {
+    setTradeSavedNoticeVisible(true);
     if (promoTimeoutRef.current) {
       window.clearTimeout(promoTimeoutRef.current);
     }
     promoTimeoutRef.current = window.setTimeout(() => {
-      setTradeSavedPromoVisible(false);
+      setTradeSavedNoticeVisible(false);
       promoTimeoutRef.current = null;
-    }, 8000);
+    }, 4000);
   };
 
   const handleAddTrade = async (payload: Parameters<typeof addTrade>[0]) => {
     try {
       await addTrade(payload);
-      showTradePromo();
+      showTradeSavedNotice();
     } catch {
       // state already updated with error
     }
@@ -142,20 +137,21 @@ const PortfolioDashboard: React.FC = () => {
           <main className="mt-10 grid gap-10 lg:grid-cols-[320px_1fr]">
             <TradeEntryForm onSubmit={handleAddTrade} loading={loading} />
             <div className="space-y-8">
-              {tradeSavedPromoVisible && (
-                <section className="rounded-xl border border-amber-200 bg-amber-100 px-6 py-5 text-sm text-amber-900 shadow-sm dark:border-amber-400/50 dark:bg-amber-500/20 dark:text-amber-200">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="font-semibold text-amber-900 dark:text-amber-200">거래가 성공적으로 저장되었습니다!</div>
-                    <span className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">스폰서</span>
-                  </div>
-                  <p className="mt-3 leading-6 text-amber-800 dark:text-amber-200/90">
-                    Trakko 매크로 인사이트 팩을 무료로 체험하고 일간 브리핑으로 다음 전략을 준비하세요.
-                  </p>
+              {tradeSavedNoticeVisible && (
+                <section className="flex items-center justify-between rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 shadow-sm dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <span>거래가 성공적으로 저장되었어요.</span>
                   <button
                     type="button"
-                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-amber-500 dark:bg-amber-300 dark:text-amber-900 dark:hover:bg-amber-200"
+                    onClick={() => {
+                      setTradeSavedNoticeVisible(false);
+                      if (promoTimeoutRef.current) {
+                        window.clearTimeout(promoTimeoutRef.current);
+                        promoTimeoutRef.current = null;
+                      }
+                    }}
+                    className="rounded px-2 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100/70 dark:text-emerald-200 dark:hover:bg-emerald-500/20"
                   >
-                    7일 체험 시작하기
+                    닫기
                   </button>
                 </section>
               )}
@@ -172,42 +168,6 @@ const PortfolioDashboard: React.FC = () => {
                   >
                     Pro 업그레이드 알아보기
                   </Link>
-                </section>
-              )}
-              {!isAdFreeUser && (
-                <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Trakko 추천 리소스</h2>
-                    <span className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">스폰서</span>
-                  </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <article className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-100/80 px-4 py-3 transition hover:border-amber-300 dark:border-amber-400/50 dark:bg-amber-500/20">
-                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-200">AI 브리핑</p>
-                      <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">실시간 뉴스 다이제스트 알림</h3>
-                      <p className="text-xs leading-5 text-amber-700/90 dark:text-amber-200/80">
-                        5분마다 핵심 시장 헤드라인을 받아보고 활동적인 트레이더를 위한 요약을 확인하세요.
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-2 inline-flex w-max items-center gap-2 rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-amber-500 dark:bg-amber-300 dark:text-amber-900 dark:hover:bg-amber-200"
-                      >
-                        자세히 보기
-                      </button>
-                    </article>
-                    <article className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-100/80 px-4 py-3 transition hover:border-amber-300 dark:border-amber-400/50 dark:bg-amber-500/20">
-                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-200">프리미엄 강의</p>
-                      <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">포트폴리오 리스크 마스터클래스</h3>
-                      <p className="text-xs leading-5 text-amber-700/90 dark:text-amber-200/80">
-                        전문가가 사용하는 단계별 리스크 관리 프레임워크를 템플릿과 함께 익혀 실전에 적용하세요.
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-2 inline-flex w-max items-center gap-2 rounded-full border border-amber-400 px-3 py-1 text-xs font-semibold text-amber-800 transition hover:border-amber-500 hover:text-amber-900 dark:border-amber-300 dark:text-amber-200 dark:hover:border-amber-200 dark:hover:text-amber-100"
-                      >
-                        지금 등록하기
-                      </button>
-                    </article>
-                  </div>
                 </section>
               )}
               <TradeEntriesList initialSeed={(adjustedInitialSeed ?? initialSeed)!} trades={filteredTrades} />
