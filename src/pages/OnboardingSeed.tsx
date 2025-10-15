@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency } from '../utils/formatCurrency';
 import { usePortfolioStore } from '../store/portfolioStore';
@@ -98,11 +98,21 @@ const OnboardingSeed: React.FC = () => {
     }
   }, [user, hasChecked, hasLoaded, initialSeed, navigate]);
 
+  const seedFormatter = useMemo(() => {
+    const isKRW = currency === 'KRW';
+    return new Intl.NumberFormat(isKRW ? 'ko-KR' : 'en-US', {
+      minimumFractionDigits: isKRW ? 0 : 2,
+      maximumFractionDigits: isKRW ? 0 : 2
+    });
+  }, [currency]);
+
+  const formatSeedValue = React.useCallback((value: number) => seedFormatter.format(value), [seedFormatter]);
+
   useEffect(() => {
     if (initialSeed !== null) {
-      setSeedInput(String(initialSeed));
+      setSeedInput(formatSeedValue(initialSeed));
     }
-  }, [initialSeed]);
+  }, [initialSeed, formatSeedValue]);
 
   useEffect(() => {
     if (portfolioTraderType) {
@@ -270,7 +280,14 @@ const OnboardingSeed: React.FC = () => {
                 setSeedInput(value);
                 if (error) clearError();
               }}
-              onBlur={() => setTouched(true)}
+              onBlur={() => {
+                setTouched(true);
+                const sanitized = seedInput.replace(/,/g, '');
+                const numeric = Number(sanitized);
+                if (!Number.isNaN(numeric) && numeric > 0) {
+                  setSeedInput(formatSeedValue(numeric));
+                }
+              }}
               placeholder="예: 5000000"
               className="w-full rounded border border-slate-300 px-3 py-2 text-base text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             />

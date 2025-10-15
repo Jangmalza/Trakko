@@ -17,6 +17,14 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
   const [exitRationale, setExitRationale] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
+  const profitLossFormatter = useMemo(() => {
+    const isKRW = currency === 'KRW';
+    return new Intl.NumberFormat(isKRW ? 'ko-KR' : 'en-US', {
+      minimumFractionDigits: isKRW ? 0 : 2,
+      maximumFractionDigits: isKRW ? 0 : 2
+    });
+  }, [currency]);
+
   const parsedProfitLoss = useMemo(() => {
     const sanitized = profitLoss.replace(/,/g, '');
     const value = Number(sanitized);
@@ -83,6 +91,11 @@ const TradeEntryForm: React.FC<TradeEntryFormProps> = ({ onSubmit, loading }) =>
             type="text"
             value={profitLoss}
             onChange={(event) => setProfitLoss(event.target.value.replace(/[^0-9+-.,]/g, ''))}
+            onBlur={() => {
+              if (!Number.isNaN(parsedProfitLoss)) {
+                setProfitLoss(profitLossFormatter.format(parsedProfitLoss));
+              }
+            }}
             placeholder="이익은 양수, 손실은 음수로 입력"
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 transition focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500"
           />
