@@ -51,17 +51,57 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
     };
   }, [initialSeed, trades]);
 
-  const sorted = useMemo(() => (
+  const sortedTrades = useMemo(() => (
     [...trades].sort((a, b) => b.tradeDate.localeCompare(a.tradeDate))
   ), [trades]);
 
   const totalTone = totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600';
 
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateRange, setDateRange] = useState<'all' | '7d' | '30d'>('all');
+
+  const filtersActive = useMemo(() => (
+    dateRange !== 'all' || searchTerm.trim().length > 0
+  ), [dateRange, searchTerm]);
+
+  const rangeThreshold = useMemo(() => {
+    if (dateRange === 'all') return null;
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    if (dateRange === '7d') {
+      start.setDate(start.getDate() - 6);
+    } else {
+      start.setDate(start.getDate() - 29);
+    }
+    return start;
+  }, [dateRange]);
+
+  const filteredTrades = useMemo(() => {
+    const normalized = searchTerm.trim().toUpperCase();
+    return sortedTrades.filter((trade) => {
+      if (normalized && !trade.ticker.toUpperCase().includes(normalized)) {
+        return false;
+      }
+      if (!rangeThreshold) {
+        return true;
+      }
+      const tradeDate = new Date(`${trade.tradeDate}T00:00:00`);
+      return tradeDate >= rangeThreshold;
+    });
+  }, [sortedTrades, searchTerm, rangeThreshold]);
+
+  const filteredTotalPnL = useMemo(() => (
+    filteredTrades.reduce(
+      (acc, trade) => acc + trade.profitLoss,
+      0
+    )
+  ), [filteredTrades]);
+
   const [editingTrade, setEditingTrade] = useState<TradeEntry | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   const dayFormatter = useMemo(
     () =>
@@ -85,7 +125,7 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
 
   const dailyGroups = useMemo<TradeGroup[]>(() => {
     const groups = new Map<string, TradeGroup>();
-    sorted.forEach((trade) => {
+    filteredTrades.forEach((trade) => {
       const key = trade.tradeDate;
       let group = groups.get(key);
       if (!group) {
@@ -102,11 +142,11 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
       group.trades.push(trade);
     });
     return Array.from(groups.values());
-  }, [sorted, dayFormatter]);
+  }, [filteredTrades, dayFormatter]);
 
   const monthlyGroups = useMemo<TradeGroup[]>(() => {
     const groups = new Map<string, TradeGroup>();
-    sorted.forEach((trade) => {
+    filteredTrades.forEach((trade) => {
       const [year, month] = trade.tradeDate.split('-');
       const key = `${year}-${month}`;
       let group = groups.get(key);
@@ -124,7 +164,7 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
       group.trades.push(trade);
     });
     return Array.from(groups.values());
-  }, [sorted, monthFormatter]);
+  }, [filteredTrades, monthFormatter]);
 
   const handleEditClick = (trade: TradeEntry) => {
     setEditingTrade(trade);
@@ -234,7 +274,7 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
 
   const renderTradeList = () => (
     <ul className="divide-y divide-slate-200 dark:divide-slate-800">
-      {sorted.map((trade) => renderTradeRow(trade))}
+      {filteredTrades.map((trade) => renderTradeRow(trade))}
     </ul>
   );
 
@@ -294,7 +334,7 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
                 ? '실적/경제 일정과 함께 손익 흐름을 확인하세요.'
                 : '환율과 수급 변화 속에서 패턴을 찾아보세요.'}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             {VIEW_MODE_OPTIONS.map((option) => {
               const active = viewMode === option.value;
               return (
@@ -312,10 +352,49 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
                 </button>
               );
             })}
+            <div className="relative ml-auto w-full max-w-xs">
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="티커 검색 (예: AAPL)"
+                className="w-full rounded-full border border-slate-300 px-4 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:placeholder:text-slate-500"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+            <span className="font-semibold">기간</span>
+            {(['all', '7d', '30d'] as const).map((range) => {
+              const label = range === 'all' ? '전체' : range === '7d' ? '최근 7일' : '최근 30일';
+              const active = dateRange === range;
+              return (
+                <button
+                  key={range}
+                  type="button"
+                  onClick={() => setDateRange(range)}
+                  className={`rounded-full px-3 py-1 text-[11px] font-semibold transition ${
+                    active
+                      ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                      : 'border border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            {filtersActive && (
+              <span className="ml-auto text-[11px] text-slate-400 dark:text-slate-500">
+                표시 중 {filteredTrades.length}건 / 총 {sortedTrades.length}건, 손익 {formatSignedCurrency(filteredTotalPnL)} ({currency})
+              </span>
+            )}
           </div>
         </div>
-        {sorted.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-slate-500 dark:text-slate-400">{emptyMessage ?? EMPTY_MESSAGE}</div>
+        {filteredTrades.length === 0 ? (
+          <div className="px-5 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+            {filtersActive
+              ? '조건에 맞는 거래가 없습니다. 검색어나 기간을 조정해보세요.'
+              : (emptyMessage ?? EMPTY_MESSAGE)}
+          </div>
         ) : viewMode === 'list' ? (
           renderTradeList()
         ) : viewMode === 'daily' ? (
