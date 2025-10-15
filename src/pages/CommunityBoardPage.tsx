@@ -38,9 +38,21 @@ const CommunityBoardPage: React.FC = () => {
 
   const canCreate = Boolean(user);
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const showSuccessBanner = useMemo(() => {
+  const banner = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    return params.get('submitted') === '1';
+    if (params.get('submitted') === '1') {
+      return {
+        message: '게시글이 성공적으로 등록되었습니다.',
+        tone: 'success' as const
+      };
+    }
+    if (params.get('deleted') === '1') {
+      return {
+        message: '게시글이 삭제되었습니다.',
+        tone: 'warning' as const
+      };
+    }
+    return null;
   }, [location.search]);
 
   const filteredPosts = useMemo(() => {
@@ -82,9 +94,15 @@ const CommunityBoardPage: React.FC = () => {
           </p>
         </header>
 
-        {showSuccessBanner && (
-          <div className="mt-4 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-            게시글이 성공적으로 등록되었습니다.
+        {banner && (
+          <div
+            className={`mt-4 rounded border px-4 py-3 text-xs ${
+              banner.tone === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200'
+                : 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700/60 dark:bg-slate-800/40 dark:text-slate-200'
+            }`}
+          >
+            {banner.message}
           </div>
         )}
 

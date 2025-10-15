@@ -1,8 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import HeaderNavigation from '../components/HeaderNavigation';
 import ThemeToggleButton from '../components/ThemeToggleButton';
-import { fetchCommunityPosts, resolveCommunityImageUrl } from '../api/communityApi';
+import {
+  deleteCommunityPost,
+  fetchCommunityPost,
+  resolveCommunityImageUrl
+} from '../api/communityApi';
 import { createComment, fetchComments, type CommunityComment } from '../api/communityCommentsApi';
 import type { CommunityPost } from '../api/communityApi';
 import { useAuthStore } from '../store/authStore';
@@ -12,6 +16,7 @@ const COMMENT_LIMIT = 2000;
 const CommunityPostPage: React.FC = () => {
   const { postId } = useParams<{ postId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, getLoginUrl } = useAuthStore();
 
   const [post, setPost] = useState<CommunityPost | null>(null);
@@ -22,7 +27,16 @@ const CommunityPostPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const postImageUrl = useMemo(() => resolveCommunityImageUrl(post?.imageUrl ?? null), [post?.imageUrl]);
+  const showUpdatedBanner = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('updated') === '1';
+  }, [location.search]);
+  const canManagePost = Boolean(
+    user && post && (post.author?.id ? post.author.id === user.id || user.role === 'ADMIN' : user.role === 'ADMIN')
+  );
 
   useEffect(() => {
     if (!postId) {
@@ -32,17 +46,19 @@ const CommunityPostPage: React.FC = () => {
 
     const loadPost = async () => {
       setLoading(true);
+      setError(null);
       try {
-        const posts = await fetchCommunityPosts();
-        const found = posts.find((item) => item.id === postId);
-        if (!found) {
-          navigate('/community', { replace: true });
-          return;
-        }
-        setPost(found);
+        const fetched = await fetchCommunityPost(postId);
+        setPost(fetched);
       } catch (fetchError) {
-        console.error(fetchError);
-        setError(fetchError instanceof Error ? fetchError.message : '게시글을 불러오지 못했습니다.');
+        console.error('Failed to load community post', fetchError);
+        const message =
+          fetchError instanceof Error ? fetchError.message : '게시글을 불러오지 못했습니다.';
+        setError(message);
+        setPost(null);
+        if (message.includes('찾을 수 없습니다')) {
+          navigate('/community', { replace: true });
+        }
       } finally {
         setLoading(false);
       }
@@ -92,6 +108,24 @@ const CommunityPostPage: React.FC = () => {
     return null;
   }, [commentLoading, comments]);
 
+  const handleDelete = async () => {
+    if (!postId || !canManagePost || deleting) return;
+    const confirmed = window.confirm('게시글을 삭제하시겠어요? 삭제 후에는 복구할 수 없습니다.');
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteCommunityPost(postId);
+      navigate('/community?deleted=1', { replace: true });
+    } catch (deleteErr) {
+      console.error('Failed to delete community post', deleteErr);
+      setDeleteError(deleteErr instanceof Error ? deleteErr.message : '게시글을 삭제하지 못했습니다.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <HeaderNavigation />
@@ -106,6 +140,16 @@ const CommunityPostPage: React.FC = () => {
         {error && (
           <div className="mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600 dark:border-red-400/40 dark:bg-red-500/10 dark:text-red-200">
             {error}
+          </div>
+        )}
+        {showUpdatedBanner && !error && (
+          <div className="mt-4 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
+            게시글이 성공적으로 수정되었습니다.
+          </div>
+        )}
+        {deleteError && (
+          <div className="mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-600 dark:border-red-400/40 dark:bg-red-500/10 dark:text-red-200">
+            {deleteError}
           </div>
         )}
 
@@ -142,7 +186,7 @@ const CommunityPostPage: React.FC = () => {
               <div className="mt-4 whitespace-pre-line text-base leading-7 text-slate-800 dark:text-slate-100">
                 {post.content}
               </div>
-              <footer className="mt-6 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
+              <footer className="mt-6 flex flex-col gap-3 text-[11px] text-slate-400 dark:text-slate-500 sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   {post.author
                     ? `${post.author.displayName ?? post.author.email ?? '회원'} · ${
@@ -150,6 +194,24 @@ const CommunityPostPage: React.FC = () => {
                       }`
                     : '탈퇴한 사용자'}
                 </span>
+                {canManagePost && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Link
+                      to={`/community/${post.id}/edit`}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1 font-semibold text-slate-600 transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
+                    >
+                      게시글 수정
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="inline-flex items-center gap-1 rounded-full border border-red-300 px-3 py-1 font-semibold text-red-600 transition hover:border-red-400 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/60 dark:text-red-300 dark:hover:border-red-400/80 dark:hover:text-red-200"
+                    >
+                      {deleting ? '삭제 중...' : '게시글 삭제'}
+                    </button>
+                  </div>
+                )}
               </footer>
             </article>
 

@@ -86,6 +86,53 @@ const uploadCommunityImageMiddleware = (req, res, next) => {
 };
 
 const buildCommunityImageUrl = (filename) => `/uploads/community/${filename}`;
+const COMMUNITY_UPLOADS_PUBLIC_PREFIX = '/uploads/community/';
+
+const resolveCommunityImageAbsolutePath = (imageUrl) => {
+  if (typeof imageUrl !== 'string' || imageUrl.length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(imageUrl, 'http://localhost');
+    if (!parsed.pathname.startsWith(COMMUNITY_UPLOADS_PUBLIC_PREFIX)) {
+      return null;
+    }
+    const basename = path.basename(parsed.pathname);
+    return basename ? path.join(communityUploadsDir, basename) : null;
+  } catch (_error) {
+    const relative = imageUrl.startsWith(COMMUNITY_UPLOADS_PUBLIC_PREFIX)
+      ? imageUrl.slice(COMMUNITY_UPLOADS_PUBLIC_PREFIX.length)
+      : imageUrl;
+    const basename = path.basename(relative);
+    return basename ? path.join(communityUploadsDir, basename) : null;
+  }
+};
+
+const removeCommunityImageByUrl = async (imageUrl) => {
+  const absolutePath = resolveCommunityImageAbsolutePath(imageUrl);
+  if (absolutePath) {
+    await removeFileIfExists(absolutePath);
+  }
+};
+
+const mapCommunityPostForResponse = (post) => ({
+  id: post.id,
+  title: post.title,
+  content: post.content,
+  createdAt: post.createdAt,
+  updatedAt: post.updatedAt,
+  imageUrl: post.imageUrl ?? null,
+  author: post.user
+    ? {
+        id: post.user.id,
+        displayName: post.user.displayName ?? null,
+        email: post.user.email ?? null,
+        subscriptionTier: post.user.subscriptionTier
+      }
+    : null,
+  commentCount: typeof post._count?.comments === 'number' ? post._count.comments : undefined
+});
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
@@ -98,7 +145,6 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL ?? `${process.env.API_BASE_URL ?? `http://localhost:${PORT}`}/api/auth/google/callback`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
-const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY ?? '';
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? '')
   .split(',')
   .map((email) => email.trim().toLowerCase())
@@ -123,12 +169,12 @@ const defaultPreferences = {
 };
 
 const MARKET_SYMBOLS = [
-  { id: 'btc', label: '비트코인 (BTC)', symbol: 'BINANCE:BTCUSDT', unit: 'USD' },
-  { id: 'eth', label: '이더리움 (ETH)', symbol: 'BINANCE:ETHUSDT', unit: 'USD' },
-  { id: 'sp500', label: 'S&P 500', symbol: '^GSPC' },
-  { id: 'nasdaq', label: '나스닥 지수', symbol: '^IXIC' },
-  { id: 'vix', label: 'VIX 지수', symbol: '^VIX' },
-  { id: 'dji', label: '다우존스', symbol: '^DJI' }
+  { id: 'btc', label: '비트코인 (BTC)', kind: 'crypto', coinId: 'bitcoin', unit: 'USD' },
+  { id: 'eth', label: '이더리움 (ETH)', kind: 'crypto', coinId: 'ethereum', unit: 'USD' },
+  { id: 'sp500', label: 'S&P 500', kind: 'stooq', stooqSymbol: '^spx' },
+  { id: 'nasdaq', label: '나스닥 지수', kind: 'stooq', stooqSymbol: '^ndq' },
+  { id: 'vix', label: 'VIX 지수', kind: 'stooq', stooqSymbol: '^vix' },
+  { id: 'dji', label: '다우존스', kind: 'stooq', stooqSymbol: '^dji' }
 ];
 
 const MARKET_CACHE_TTL_MS = 60 * 1000;
@@ -383,63 +429,130 @@ function normalizeTraderType(value) {
   return TRADER_TYPE_VALUES.includes(upper) ? upper : 'KR_STOCK';
 }
 
-async function fetchMarketQuote(symbolConfig) {
-  const cached = marketCache.get(symbolConfig.id);
-  const now = Date.now();
-  if (cached && now - cached.fetchedAt < MARKET_CACHE_TTL_MS) {
-    return cached.data;
-  }
+const getDefaultQuote = (symbolConfig) => ({
+  id: symbolConfig.id,
+  label: symbolConfig.label,
+  price: null,
+  changePercent: null
+});
 
-  if (!FINNHUB_API_KEY) {
-    throw new Error('FINNHUB_API_KEY is not configured');
-  }
+const fetchCryptoQuotes = async (symbols, now) => {
+  if (symbols.length === 0) return;
 
-  const url = new URL('https://finnhub.io/api/v1/quote');
-  url.searchParams.set('symbol', symbolConfig.symbol);
-  url.searchParams.set('token', FINNHUB_API_KEY);
+  const url = new URL('https://api.coingecko.com/api/v3/simple/price');
+  url.searchParams.set('ids', symbols.map((symbol) => symbol.coinId).join(','));
+  url.searchParams.set('vs_currencies', 'usd');
+  url.searchParams.set('include_24hr_change', 'true');
 
   const response = await fetch(url.toString());
   if (!response.ok) {
-    throw new Error(`Finnhub quote request failed (${response.status})`);
+    throw new Error(`Coingecko request failed (${response.status})`);
   }
 
   const data = await response.json();
-  const price = typeof data?.c === 'number' ? data.c : null;
-  const changePercent = typeof data?.dp === 'number' ? data.dp : null;
+  for (const symbol of symbols) {
+    const entry = data?.[symbol.coinId] ?? null;
+    const price = typeof entry?.usd === 'number' ? entry.usd : null;
+    const changePercent = typeof entry?.usd_24h_change === 'number' ? entry.usd_24h_change : null;
+    const quote = {
+      id: symbol.id,
+      label: symbol.label,
+      price,
+      changePercent
+    };
+    marketCache.set(symbol.id, { data: quote, fetchedAt: now });
+  }
+};
 
-  const result = {
-    id: symbolConfig.id,
-    label: symbolConfig.label,
-    price,
-    changePercent
-  };
+const parseCsvLines = (csvText) => {
+  return csvText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+};
 
-  marketCache.set(symbolConfig.id, { data: result, fetchedAt: now });
-  return result;
-}
+const fetchStooqQuotes = async (symbols, now) => {
+  if (symbols.length === 0) return;
+
+  const query = symbols.map((symbol) => symbol.stooqSymbol.toLowerCase()).join(',');
+  const url = new URL('https://stooq.com/q/l/');
+  url.searchParams.set('s', query);
+  url.searchParams.set('f', 'sd2t2ohlc');
+  url.searchParams.set('h', '');
+  url.searchParams.set('e', 'csv');
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`Stooq request failed (${response.status})`);
+  }
+
+  const text = await response.text();
+  const lines = parseCsvLines(text);
+  if (lines.length <= 1) {
+    throw new Error('Stooq response did not contain any rows');
+  }
+
+  const symbolMap = new Map(symbols.map((symbol) => [symbol.stooqSymbol.toLowerCase(), symbol]));
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const row = lines[i];
+    const parts = row.split(',');
+    if (parts.length < 7) continue;
+    const rawSymbol = parts[0]?.trim().toLowerCase();
+    if (!rawSymbol || !symbolMap.has(rawSymbol)) continue;
+
+    const config = symbolMap.get(rawSymbol);
+    const open = Number.parseFloat(parts[3]);
+    const close = Number.parseFloat(parts[6]);
+    const price = Number.isFinite(close) ? close : null;
+    const changePercent =
+      Number.isFinite(close) && Number.isFinite(open) && open !== 0
+        ? ((close - open) / open) * 100
+        : null;
+
+    const quote = {
+      id: config.id,
+      label: config.label,
+      price,
+      changePercent
+    };
+
+    marketCache.set(config.id, { data: quote, fetchedAt: now });
+  }
+};
 
 async function fetchMarketQuotes() {
-  const results = [];
-  for (const symbol of MARKET_SYMBOLS) {
-    try {
-      const quote = await fetchMarketQuote(symbol);
-      results.push(quote);
-    } catch (error) {
-      console.warn(`Failed to fetch market quote for ${symbol.symbol}`, error);
-      const cached = marketCache.get(symbol.id);
-      if (cached) {
-        results.push(cached.data);
-      } else {
-        results.push({
-          id: symbol.id,
-          label: symbol.label,
-          price: null,
-          changePercent: null
-        });
+  const now = Date.now();
+  const staleSymbols = MARKET_SYMBOLS.filter((symbol) => {
+    const cached = marketCache.get(symbol.id);
+    return !cached || now - cached.fetchedAt >= MARKET_CACHE_TTL_MS;
+  });
+
+  if (staleSymbols.length > 0) {
+    const cryptoSymbols = staleSymbols.filter((symbol) => symbol.kind === 'crypto');
+    const stooqSymbols = staleSymbols.filter((symbol) => symbol.kind === 'stooq');
+
+    if (cryptoSymbols.length > 0) {
+      try {
+        await fetchCryptoQuotes(cryptoSymbols, now);
+      } catch (error) {
+        console.warn('Failed to fetch crypto quotes from Coingecko', error);
+      }
+    }
+
+    if (stooqSymbols.length > 0) {
+      try {
+        await fetchStooqQuotes(stooqSymbols, now);
+      } catch (error) {
+        console.warn('Failed to fetch index quotes from Stooq', error);
       }
     }
   }
-  return results;
+
+  return MARKET_SYMBOLS.map((symbol) => {
+    const cached = marketCache.get(symbol.id);
+    return cached ? cached.data : getDefaultQuote(symbol);
+  });
 }
 
 async function ensureUserRecord(sessionUser) {
@@ -1189,23 +1302,7 @@ app.get('/api/community/posts', async (_req, res) => {
       take: 100
     });
 
-    const sanitized = posts.map((post) => ({
-      id: post.id,
-      title: post.title,
-      content: post.content,
-      createdAt: post.createdAt,
-      updatedAt: post.updatedAt,
-      imageUrl: post.imageUrl ?? null,
-      author: post.user
-        ? {
-            id: post.user.id,
-            displayName: post.user.displayName ?? null,
-            email: post.user.email ?? null,
-            subscriptionTier: post.user.subscriptionTier
-          }
-        : null,
-      commentCount: post._count.comments
-    }));
+    const sanitized = posts.map(mapCommunityPostForResponse);
 
     res.json(sanitized);
   } catch (error) {
@@ -1258,28 +1355,176 @@ app.post('/api/community/posts', requireAuth, uploadCommunityImageMiddleware, as
       }
     });
 
-    res.status(201).json({
-      id: created.id,
-      title: created.title,
-      content: created.content,
-      createdAt: created.createdAt,
-      updatedAt: created.updatedAt,
-      imageUrl: created.imageUrl ?? null,
-      author: created.user
-        ? {
-            id: created.user.id,
-            displayName: created.user.displayName ?? null,
-            email: created.user.email ?? null,
-            subscriptionTier: created.user.subscriptionTier
-          }
-        : null
-    });
+    res.status(201).json(mapCommunityPostForResponse(created));
   } catch (error) {
     if (uploadedFilePath) {
       await removeFileIfExists(uploadedFilePath);
     }
     console.error('Failed to create community post', error);
     res.status(500).json({ message: '게시글을 등록하지 못했습니다.' });
+  }
+});
+
+app.get('/api/community/posts/:postId', async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const post = await prisma.communityPost.findUnique({
+      where: { id: postId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            subscriptionTier: true
+          }
+        },
+        _count: {
+          select: { comments: true }
+        }
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+    }
+
+    res.json(mapCommunityPostForResponse(post));
+  } catch (error) {
+    console.error('Failed to read community post', error);
+    res.status(500).json({ message: '게시글을 불러오지 못했습니다.' });
+  }
+});
+
+app.patch('/api/community/posts/:postId', requireAuth, uploadCommunityImageMiddleware, async (req, res) => {
+  const uploadedFilePath = req.file?.path ?? null;
+  try {
+    const { postId } = req.params;
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+
+    const existing = await prisma.communityPost.findUnique({
+      where: { id: postId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            subscriptionTier: true
+          }
+        }
+      }
+    });
+
+    if (!existing) {
+      if (uploadedFilePath) {
+        await removeFileIfExists(uploadedFilePath);
+      }
+      return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+    }
+
+    const isOwner = existing.userId === sessionUser.id;
+    const isAdmin = sessionUser.role === 'ADMIN';
+    if (!isOwner && !isAdmin) {
+      if (uploadedFilePath) {
+        await removeFileIfExists(uploadedFilePath);
+      }
+      return res.status(403).json({ message: '게시글을 수정할 수 있는 권한이 없습니다.' });
+    }
+
+    const { title, content, removeImage } = req.body ?? {};
+    const trimmedTitle = typeof title === 'string' ? title.trim() : '';
+    const trimmedContent = typeof content === 'string' ? content.trim() : '';
+
+    if (trimmedTitle.length === 0) {
+      if (uploadedFilePath) {
+        await removeFileIfExists(uploadedFilePath);
+      }
+      return res.status(400).json({ message: '제목을 입력해주세요.' });
+    }
+    if (trimmedContent.length === 0) {
+      if (uploadedFilePath) {
+        await removeFileIfExists(uploadedFilePath);
+      }
+      return res.status(400).json({ message: '본문을 입력해주세요.' });
+    }
+
+    const removeImageRequested = typeof removeImage === 'string'
+      ? removeImage.toLowerCase() === 'true'
+      : Boolean(removeImage);
+
+    let nextImageUrl = existing.imageUrl ?? null;
+    let shouldRemovePrevious = false;
+
+    if (req.file?.filename) {
+      nextImageUrl = buildCommunityImageUrl(req.file.filename);
+      shouldRemovePrevious = Boolean(existing.imageUrl);
+    } else if (removeImageRequested) {
+      nextImageUrl = null;
+      shouldRemovePrevious = Boolean(existing.imageUrl);
+    }
+
+    const updated = await prisma.communityPost.update({
+      where: { id: postId },
+      data: {
+        title: trimmedTitle.slice(0, 200),
+        content: trimmedContent,
+        imageUrl: nextImageUrl
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            displayName: true,
+            email: true,
+            subscriptionTier: true
+          }
+        }
+      }
+    });
+
+    if (shouldRemovePrevious && existing.imageUrl) {
+      await removeCommunityImageByUrl(existing.imageUrl);
+    }
+
+    res.json(mapCommunityPostForResponse(updated));
+  } catch (error) {
+    if (uploadedFilePath) {
+      await removeFileIfExists(uploadedFilePath);
+    }
+    console.error('Failed to update community post', error);
+    res.status(500).json({ message: '게시글을 수정하지 못했습니다.' });
+  }
+});
+
+app.delete('/api/community/posts/:postId', requireAuth, async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const sessionUser = req.user;
+    await ensureUserRecord(sessionUser);
+
+    const existing = await prisma.communityPost.findUnique({ where: { id: postId } });
+    if (!existing) {
+      return res.status(404).json({ message: '게시글을 찾을 수 없습니다.' });
+    }
+
+    const isOwner = existing.userId === sessionUser.id;
+    const isAdmin = sessionUser.role === 'ADMIN';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: '게시글을 삭제할 수 있는 권한이 없습니다.' });
+    }
+
+    await prisma.communityPost.delete({ where: { id: postId } });
+
+    if (existing.imageUrl) {
+      await removeCommunityImageByUrl(existing.imageUrl);
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to delete community post', error);
+    res.status(500).json({ message: '게시글을 삭제하지 못했습니다.' });
   }
 });
 
@@ -1412,10 +1657,6 @@ app.post('/api/profile/trader-type', requireAuth, async (req, res) => {
 });
 
 app.get('/api/markets/indices', async (_req, res) => {
-  if (!FINNHUB_API_KEY) {
-    return res.status(503).json({ message: '시장 데이터를 불러올 수 없습니다. 관리자에게 문의하세요.' });
-  }
-
   try {
     const quotes = await fetchMarketQuotes();
     res.json(quotes);

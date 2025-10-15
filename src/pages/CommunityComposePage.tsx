@@ -1,8 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import HeaderNavigation from '../components/HeaderNavigation';
-import ThemeToggleButton from '../components/ThemeToggleButton';
-import { createCommunityPost } from '../api/communityApi';
+import {
+  createCommunityPost,
+  fetchCommunityPost,
+  resolveCommunityImageUrl,
+  updateCommunityPost
+} from '../api/communityApi';
 import { useAuthStore } from '../store/authStore';
 
 const TITLE_LIMIT = 120;
@@ -12,6 +16,9 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const CommunityComposePage: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { postId } = useParams<{ postId?: string }>();
+  const isEditing = Boolean(postId);
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -19,42 +26,114 @@ const CommunityComposePage: React.FC = () => {
   const [imageError, setImageError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(isEditing);
+  const [initialImageUrl, setInitialImageUrl] = useState<string | null>(null);
+  const [imageMode, setImageMode] = useState<'existing' | 'new' | 'none'>(isEditing ? 'none' : 'none');
+  const [postAuthorId, setPostAuthorId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   const trimmedTitle = title.trim();
   const trimmedContent = content.trim();
   const formValid = trimmedTitle.length > 0 && trimmedContent.length > 0;
-  const canCreate = Boolean(user);
+  const isAuthorizedForEdit =
+    !isEditing ||
+    (user
+      ? postAuthorId
+        ? user.id === postAuthorId || user.role === 'ADMIN'
+        : user.role === 'ADMIN'
+      : false);
+  const canSubmit = Boolean(user) && !loading && isAuthorizedForEdit;
+  const shouldRemoveExistingImage = isEditing && imageMode === 'none' && Boolean(initialImageUrl);
 
   const statusMessage = useMemo(() => {
     if (!user) {
       return '로그인 후에만 게시글을 작성할 수 있습니다. 상단의 로그인 버튼을 눌러 접속해 주세요.';
     }
+    if (isEditing) {
+      return loading ? '게시글 정보를 불러오는 중입니다...' : '게시글 내용을 수정하고 다시 공유해 주세요.';
+    }
     return '최근 거래에서 얻은 인사이트, 질문, 전략을 자유롭게 공유해 주세요.';
-  }, [user]);
+  }, [user, isEditing, loading]);
+
+  const revokeCurrentObjectUrl = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (imagePreview) {
-        URL.revokeObjectURL(imagePreview);
+      revokeCurrentObjectUrl();
+    };
+  }, [revokeCurrentObjectUrl]);
+
+  useEffect(() => {
+    if (!isEditing || !postId) {
+      return;
+    }
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const post = await fetchCommunityPost(postId);
+        setTitle(post.title);
+        setContent(post.content);
+        setInitialImageUrl(post.imageUrl ?? null);
+        setPostAuthorId(post.author?.id ?? null);
+        setImageFile(null);
+        setImageError(null);
+        revokeCurrentObjectUrl();
+
+        if (post.imageUrl) {
+          setImagePreview(resolveCommunityImageUrl(post.imageUrl));
+          setImageMode('existing');
+        } else {
+          setImagePreview(null);
+          setImageMode('none');
+        }
+      } catch (fetchError) {
+        console.error('Failed to load community post', fetchError);
+        setError(fetchError instanceof Error ? fetchError.message : '게시글을 불러오지 못했습니다.');
+        setImagePreview(null);
+        setImageMode('none');
+        setPostAuthorId(null);
+      } finally {
+        setLoading(false);
       }
     };
-  }, [imagePreview]);
+
+    void load();
+  }, [isEditing, postId, revokeCurrentObjectUrl]);
+
+  useEffect(() => {
+    if (!isEditing || !postAuthorId || !user) return;
+    if (user.id !== postAuthorId && user.role !== 'ADMIN') {
+      setError('게시글을 수정할 수 있는 권한이 없습니다.');
+    }
+  }, [isEditing, postAuthorId, user]);
 
   const handleRemoveImage = () => {
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-    }
+    revokeCurrentObjectUrl();
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     setImageFile(null);
-    setImagePreview(null);
     setImageError(null);
+
+    if (isEditing && imageMode === 'new' && initialImageUrl) {
+      setImagePreview(resolveCommunityImageUrl(initialImageUrl));
+      setImageMode('existing');
+    } else {
+      setImagePreview(null);
+      setImageMode('none');
+    }
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canCreate || submitting) return;
+    if (!canSubmit || submitting) return;
 
     const nextFile = event.target.files?.[0];
     if (!nextFile) {
@@ -72,37 +151,51 @@ const CommunityComposePage: React.FC = () => {
 
     if (nextFile.size > MAX_IMAGE_SIZE) {
       setImageError('이미지는 최대 5MB까지 업로드할 수 있습니다.');
-      event.target.value = '';
-      setImageFile(null);
-      setImagePreview(null);
+      handleRemoveImage();
       return;
     }
 
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
-    }
-
+    revokeCurrentObjectUrl();
     setImageError(null);
     setImageFile(nextFile);
-    setImagePreview(URL.createObjectURL(nextFile));
+    const objectUrl = URL.createObjectURL(nextFile);
+    objectUrlRef.current = objectUrl;
+    setImagePreview(objectUrl);
+    setImageMode('new');
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canCreate || !formValid || submitting) return;
+    if (!canSubmit || !formValid || submitting) return;
 
     setSubmitting(true);
     setError(null);
     try {
-      await createCommunityPost({
-        title: trimmedTitle,
-        content: trimmedContent,
-        image: imageFile
-      });
-      navigate('/community?submitted=1', { replace: true });
+      if (isEditing && postId) {
+        await updateCommunityPost(postId, {
+          title: trimmedTitle,
+          content: trimmedContent,
+          image: imageMode === 'new' ? imageFile ?? undefined : undefined,
+          removeImage: shouldRemoveExistingImage
+        });
+        navigate(`/community/${postId}?updated=1`, { replace: true });
+      } else {
+        await createCommunityPost({
+          title: trimmedTitle,
+          content: trimmedContent,
+          image: imageFile
+        });
+        navigate('/community?submitted=1', { replace: true });
+      }
     } catch (submitError) {
-      console.error('Failed to create community post', submitError);
-      setError(submitError instanceof Error ? submitError.message : '게시글을 등록하지 못했습니다.');
+      console.error(isEditing ? 'Failed to update community post' : 'Failed to create community post', submitError);
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : isEditing
+            ? '게시글을 수정하지 못했습니다.'
+            : '게시글을 등록하지 못했습니다.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -114,7 +207,7 @@ const CommunityComposePage: React.FC = () => {
       <div className="mx-auto max-w-3xl px-6 py-12">
         <header className="space-y-2">
           <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Community</p>
-          <h1 className="text-3xl font-semibold">게시글 작성</h1>
+          <h1 className="text-3xl font-semibold">{isEditing ? '게시글 수정' : '게시글 작성'}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">{statusMessage}</p>
         </header>
 
@@ -138,7 +231,7 @@ const CommunityComposePage: React.FC = () => {
                 maxLength={TITLE_LIMIT}
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 placeholder="글 제목을 입력하세요."
-                disabled={!canCreate || submitting}
+                disabled={!canSubmit || submitting}
               />
               <span className="text-[11px] text-slate-400 dark:text-slate-500">{title.length}/{TITLE_LIMIT}</span>
             </label>
@@ -151,7 +244,7 @@ const CommunityComposePage: React.FC = () => {
                 rows={12}
                 className="w-full rounded border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-0 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 placeholder="공유하고 싶은 내용을 자유롭게 적어주세요."
-                disabled={!canCreate || submitting}
+                disabled={!canSubmit || submitting}
               />
               <span className="text-[11px] text-slate-400 dark:text-slate-500">{content.length}/{CONTENT_LIMIT}</span>
             </label>
@@ -163,7 +256,7 @@ const CommunityComposePage: React.FC = () => {
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
                 onChange={handleImageChange}
-                disabled={!canCreate || submitting}
+                disabled={!canSubmit || submitting}
                 className="text-xs text-slate-500 file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-300 dark:text-slate-400 dark:file:bg-slate-700 dark:file:text-slate-200 dark:hover:file:bg-slate-600"
               />
               <span className="text-[11px] text-slate-400 dark:text-slate-500">PNG, JPG, WEBP, GIF 형식, 최대 5MB</span>
@@ -175,7 +268,7 @@ const CommunityComposePage: React.FC = () => {
                     onClick={handleRemoveImage}
                     className="absolute right-3 top-3 rounded-full bg-slate-900/80 px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-900 dark:bg-slate-100/80 dark:text-slate-900 dark:hover:bg-slate-100"
                   >
-                    이미지 제거
+                    {isEditing && imageMode === 'existing' ? '이미지 삭제' : '이미지 제거'}
                   </button>
                 </div>
               )}
@@ -185,10 +278,10 @@ const CommunityComposePage: React.FC = () => {
             <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
               <button
                 type="submit"
-                disabled={!formValid || !canCreate || submitting}
+                disabled={!formValid || !canSubmit || submitting}
                 className="inline-flex items-center gap-2 rounded bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
               >
-                {submitting ? '등록 중...' : '게시글 등록'}
+                {submitting ? (isEditing ? '수정 중...' : '등록 중...') : isEditing ? '게시글 수정' : '게시글 등록'}
               </button>
               <Link
                 to="/community"
@@ -199,19 +292,13 @@ const CommunityComposePage: React.FC = () => {
             </div>
             {error && <p className="text-xs text-red-500">{error}</p>}
           </form>
-        </section>
-
-        <section className="mt-8 rounded-xl border border-slate-200 bg-slate-50 px-6 py-6 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
-          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">작성 팁</h2>
-          <ul className="mt-3 space-y-2 list-disc pl-4">
-            <li>실제 거래 경험과 인사이트를 담으면 다른 사용자에게 더 도움이 됩니다.</li>
-            <li>질문에는 가능한 한 상황과 근거를 자세히 적어 주세요.</li>
-            <li>Pro 구독자의 게시글에는 Pro 배지가 표시됩니다.</li>
-          </ul>
-          <p className="mt-3 text-[11px] text-slate-400 dark:text-slate-500">게시글은 추후 댓글 및 알림 기능과 연동될 예정입니다.</p>
+          {isEditing && loading && (
+            <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+              게시글 정보를 불러오는 중입니다. 잠시만 기다려 주세요.
+            </div>
+          )}
         </section>
       </div>
-      <ThemeToggleButton />
     </div>
   );
 };

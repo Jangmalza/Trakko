@@ -11,6 +11,7 @@ import TradesPage from './pages/TradesPage.tsx';
 import SubscriptionStatusPage from './pages/SubscriptionStatusPage.tsx';
 import CommunityBoardPage from './pages/CommunityBoardPage.tsx';
 import CommunityComposePage from './pages/CommunityComposePage.tsx';
+import CommunityPostPage from './pages/CommunityPostPage.tsx';
 import { useAuthBootstrap } from './hooks/useAuthBootstrap.ts';
 import { useThemeStore } from './store/themeStore.ts';
 
@@ -23,6 +24,8 @@ const router = createBrowserRouter([
   { path: '/announcements', element: <AnnouncementsPage /> },
   { path: '/community', element: <CommunityBoardPage /> },
   { path: '/community/new', element: <CommunityComposePage /> },
+  { path: '/community/:postId/edit', element: <CommunityComposePage /> },
+  { path: '/community/:postId', element: <CommunityPostPage /> },
   { path: '/auth/callback', element: <AuthCallback /> },
   { path: '*', element: <Navigate to="/" replace /> }
 ]);
