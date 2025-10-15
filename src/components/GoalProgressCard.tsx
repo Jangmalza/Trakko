@@ -47,6 +47,18 @@ const renderGoalSection = (section: GoalProgressSummary, loading: boolean) => {
   const progressPercent = clampProgress(section.progressPercent);
   const hasGoal = Boolean(section.goal);
 
+  if (loading) {
+    return (
+      <article className="rounded-lg border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex animate-pulse flex-col gap-4">
+          <div className="h-3 w-24 rounded bg-slate-200 dark:bg-slate-700" />
+          <div className="h-4 w-40 rounded bg-slate-200 dark:bg-slate-700" />
+          <div className="h-20 rounded bg-slate-200 dark:bg-slate-700" />
+        </div>
+      </article>
+    );
+  }
+
   if (!hasGoal) {
     return (
       <article className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
@@ -54,7 +66,7 @@ const renderGoalSection = (section: GoalProgressSummary, loading: boolean) => {
         <h3 className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{copy.title}</h3>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{copy.emptyTitle}</p>
         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{copy.emptyDescription}</p>
-        <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="mt-4 flex flex-wrap items-center gap-4">
           <div>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">{copy.achievedLabel}</p>
             <p className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">
@@ -63,7 +75,7 @@ const renderGoalSection = (section: GoalProgressSummary, loading: boolean) => {
           </div>
           <Link
             to="/settings"
-            className="inline-flex items-center rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="inline-flex flex-shrink-0 items-center gap-2 rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             {copy.ctaLabel}
           </Link>
@@ -93,7 +105,7 @@ const renderGoalSection = (section: GoalProgressSummary, loading: boolean) => {
       <div className="mt-4 space-y-3">
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
           <span>달성률</span>
-          <span>{loading ? '업데이트 중...' : `${progressPercent.toFixed(1)}%`}</span>
+          <span>{`${progressPercent.toFixed(1)}%`}</span>
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
           <div
@@ -135,6 +147,7 @@ const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ summary, loading = 
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500">Performance Goals</p>
           <h2 className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">월간·연간 목표 요약</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">성과 목표를 설정하면 손익 추이를 목적에 맞춰 관리할 수 있습니다.</p>
         </div>
         <Link
           to="/settings"
@@ -154,7 +167,7 @@ const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ summary, loading = 
               <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Annual Goal</p>
               <h3 className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">연간 목표는 Pro에서 제공됩니다</h3>
               <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                장기 성과를 추적하고 누적 손익을 관리하려면 Pro 구독으로 업그레이드해 주세요.
+                연간 목표를 설정하면 누적 손익 추이와 장기 전략을 한눈에 확인할 수 있습니다.
               </p>
             </div>
             <Link
