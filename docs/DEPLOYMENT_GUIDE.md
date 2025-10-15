@@ -133,6 +133,10 @@ sudo certbot --nginx -d api.your-domain -d your-domain
 ## 16. 개발/운영 환경 분리 가이드
 - `ecosystem.config.cjs`로 PM2 프로세스를 `trakko-dev`, `trakko-prod` 두 개로 나누고, 각 프로세스에 `NODE_ENV`, `SERVER_ENV_FILE` 등 환경 변수를 분리 설정합니다. 개발용은 `watch` 옵션을 켜고, 운영용은 꺼둡니다. 예시는 아래와 같습니다.
   ```js
+  const path = require('path');
+  const DEV_APP_PATH = __dirname;
+  const PROD_APP_PATH = path.resolve(__dirname, '../Trakko-prod');
+
   module.exports = {
     apps: [
       {
@@ -140,6 +144,7 @@ sudo certbot --nginx -d api.your-domain -d your-domain
         script: 'server/index.js',
         watch: true,
         ignore_watch: ['dist', 'node_modules', 'uploads'],
+        cwd: DEV_APP_PATH,
         env: {
           NODE_ENV: 'development',
           SERVER_ENV_FILE: 'server/.env.development'
@@ -149,7 +154,7 @@ sudo certbot --nginx -d api.your-domain -d your-domain
         name: 'trakko-frontend-dev',
         script: 'npm',
         args: 'run dev -- --host --port 5173',
-        cwd: __dirname,
+        cwd: DEV_APP_PATH,
         watch: false,
         env: {
           NODE_ENV: 'development'
@@ -159,6 +164,7 @@ sudo certbot --nginx -d api.your-domain -d your-domain
         name: 'trakko-prod',
         script: 'server/index.js',
         watch: false,
+        cwd: PROD_APP_PATH,
         env: {
           NODE_ENV: 'production',
           SERVER_ENV_FILE: 'server/.env.production'
@@ -168,7 +174,7 @@ sudo certbot --nginx -d api.your-domain -d your-domain
         name: 'trakko-frontend-prod',
         script: 'npm',
         args: 'run preview -- --host --port 4173',
-        cwd: __dirname,
+        cwd: PROD_APP_PATH,
         watch: false,
         env: {
           NODE_ENV: 'production'
@@ -176,7 +182,8 @@ sudo certbot --nginx -d api.your-domain -d your-domain
       }
     ]
   };
-  ```
+```
+- 운영 환경과 개발 환경의 코드를 물리적으로 분리하려면 레포를 두 번 클론해 `~/Trakko-dev`, `~/Trakko-prod`처럼 유지하고, `ecosystem.config.cjs`의 `DEV_APP_PATH`, `PROD_APP_PATH` 상수를 해당 경로로 맞춥니다. 현재 예시는 `ecosystem.config.cjs`가 `~/Trakko-dev`에 있다고 가정하고 개발용은 현재 디렉터리, 운영용은 `../Trakko-prod`를 참조합니다. 필요 시 경로를 직접 수정하세요.
 - `server/.env.development`, `server/.env.production`처럼 환경 전용 dotenv 파일을 준비하고, 운영 비밀키와 DB 접속 정보를 구분 보관합니다. 노출 방지를 위해 Git에 커밋하지 마세요.
 - Prisma 마이그레이션은 개발 DB에는 `prisma migrate dev`, 운영 DB에는 `prisma migrate deploy`로 별도로 적용합니다. 운영 반영 전에는 반드시 백업 스냅샷을 생성하세요.
 - 각 환경이 서로 다른 MySQL 인스턴스(혹은 최소한 별도 스키마)를 바라보도록 `DATABASE_URL` 값을 분리해 데이터 오염을 방지합니다.
