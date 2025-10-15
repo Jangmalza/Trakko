@@ -173,8 +173,8 @@ const MARKET_SYMBOLS = [
   { id: 'eth', label: '이더리움 (ETH)', kind: 'crypto', coinId: 'ethereum', unit: 'USD' },
   { id: 'sp500', label: 'S&P 500', kind: 'stooq', stooqSymbol: '^spx' },
   { id: 'nasdaq', label: '나스닥 지수', kind: 'stooq', stooqSymbol: '^ndq' },
-  { id: 'vix', label: 'VIX 지수', kind: 'stooq', stooqSymbol: '^vix' },
-  { id: 'dji', label: '다우존스', kind: 'stooq', stooqSymbol: '^dji' }
+  { id: 'dji', label: '다우존스', kind: 'stooq', stooqSymbol: '^dji' },
+  { id: 'nikkei', label: '니케이 225', kind: 'stooq', stooqSymbol: '^nkx' }
 ];
 
 const MARKET_CACHE_TTL_MS = 60 * 1000;
@@ -464,12 +464,11 @@ const fetchCryptoQuotes = async (symbols, now) => {
   }
 };
 
-const parseCsvLines = (csvText) => {
-  return csvText
+const parseCsvLines = (csvText) =>
+  csvText
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
-};
 
 const fetchStooqQuotes = async (symbols, now) => {
   if (symbols.length === 0) return;
@@ -505,10 +504,15 @@ const fetchStooqQuotes = async (symbols, now) => {
     const open = Number.parseFloat(parts[3]);
     const close = Number.parseFloat(parts[6]);
     const price = Number.isFinite(close) ? close : null;
-    const changePercent =
-      Number.isFinite(close) && Number.isFinite(open) && open !== 0
-        ? ((close - open) / open) * 100
-        : null;
+
+    let changePercent = null;
+    if (Number.isFinite(close) && Number.isFinite(open)) {
+      if (open === 0) {
+        changePercent = null;
+      } else {
+        changePercent = ((close - open) / open) * 100;
+      }
+    }
 
     const quote = {
       id: config.id,

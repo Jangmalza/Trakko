@@ -5,21 +5,25 @@ import { fetchMarketQuotes } from '../api/marketsApi';
 type MarketMetric = {
   id: string;
   label: string;
-  value: number;
+  value: number | null;
   unit?: string;
-  change: number;
+  change: number | null;
 };
 
 const BASE_MARKETS: MarketMetric[] = [
-  { id: 'btc', label: '비트코인 (BTC)', value: NaN, unit: 'USD', change: NaN },
-  { id: 'eth', label: '이더리움 (ETH)', value: NaN, unit: 'USD', change: NaN },
-  { id: 'sp500', label: 'S&P 500', value: NaN, unit: undefined, change: NaN },
-  { id: 'nasdaq', label: '나스닥 지수', value: NaN, unit: undefined, change: NaN },
-  { id: 'vix', label: 'VIX 지수', value: NaN, unit: undefined, change: NaN },
-  { id: 'dji', label: '다우존스', value: NaN, unit: undefined, change: NaN }
+  { id: 'btc', label: '비트코인 (BTC)', value: null, unit: 'USD', change: null },
+  { id: 'eth', label: '이더리움 (ETH)', value: null, unit: 'USD', change: null },
+  { id: 'sp500', label: 'S&P 500', value: null, unit: undefined, change: null },
+  { id: 'nasdaq', label: '나스닥 지수', value: null, unit: undefined, change: null },
+  { id: 'dji', label: '다우존스', value: null, unit: undefined, change: null },
+  { id: 'nikkei', label: '니케이 225', value: null, unit: undefined, change: null }
 ];
 
 const formatValue = (market: MarketMetric): string => {
+  if (!Number.isFinite(market.value)) {
+    return '—';
+  }
+
   const options: Intl.NumberFormatOptions = {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
@@ -35,7 +39,7 @@ const formatValue = (market: MarketMetric): string => {
   }
 
   const formatter = new Intl.NumberFormat('en-US', options);
-  return formatter.format(market.value);
+  return formatter.format(market.value as number);
 };
 
 const MiniMarketTicker: React.FC = () => {
@@ -50,8 +54,12 @@ const MiniMarketTicker: React.FC = () => {
       const map = new Map(quotes.map((quote) => [quote.id, quote]));
       return BASE_MARKETS.map((base) => {
         const quote = map.get(base.id);
-        const value = typeof quote?.price === 'number' && quote.price > 0 ? quote.price : base.value;
-        const change = typeof quote?.changePercent === 'number' ? quote.changePercent : base.change;
+        const value =
+          typeof quote?.price === 'number' && Number.isFinite(quote.price) ? quote.price : base.value;
+        const change =
+          typeof quote?.changePercent === 'number' && Number.isFinite(quote.changePercent)
+            ? quote.changePercent
+            : base.change;
         return {
           ...base,
           value,
@@ -89,16 +97,22 @@ const MiniMarketTicker: React.FC = () => {
     <div className="w-full border-t border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-4 sm:gap-5">
         {markets.map((market) => {
-          const isUp = market.change >= 0;
-          const changeClass = isUp ? 'text-emerald-500' : 'text-rose-500';
-          const sign = isUp ? '+' : '';
+          const isUp = Number.isFinite(market.change) && (market.change as number) >= 0;
+          const changeClass = Number.isFinite(market.change)
+            ? isUp
+              ? 'text-emerald-500'
+              : 'text-rose-500'
+            : 'text-slate-400 dark:text-slate-500';
+          const changeText = Number.isFinite(market.change)
+            ? `${isUp ? '+' : ''}${(market.change as number).toFixed(2)}%`
+            : '—';
 
           return (
             <div key={market.id} className="flex flex-col items-center leading-tight sm:text-xs text-[11px]">
               <span className="font-semibold text-slate-900 dark:text-slate-100">{market.label}</span>
               <span className="text-slate-600 dark:text-slate-300">
                 {formatValue(market)}{' '}
-                <span className={changeClass}>{`${sign}${market.change.toFixed(2)}%`}</span>
+                <span className={changeClass}>{changeText}</span>
               </span>
             </div>
           );
