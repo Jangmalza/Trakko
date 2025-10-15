@@ -276,7 +276,7 @@ const SettingsPage: React.FC = () => {
                   to="/subscription"
                   className="inline-flex items-center gap-2 rounded-full border border-blue-500 px-4 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
                 >
-                  구독 관리
+                  관리
                 </Link>
               ) : (
                 <button
