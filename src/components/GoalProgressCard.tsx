@@ -158,7 +158,7 @@ const GoalProgressCard: React.FC<GoalProgressCardProps> = ({ summary, loading = 
               </p>
             </div>
             <Link
-              to="/settings"
+              to="/subscription"
               className="mt-3 inline-flex w-max items-center gap-1 rounded-full border border-blue-500 px-3 py-1 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
             >
               Pro 업그레이드

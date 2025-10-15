@@ -543,7 +543,7 @@ const SettingsPage: React.FC = () => {
                   </p>
                   <button
                     type="button"
-                    onClick={() => navigate('/settings', { replace: false })}
+                    onClick={() => navigate('/subscription', { replace: false })}
                     className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-500 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
                   >
                     Pro 업그레이드 알아보기

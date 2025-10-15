@@ -183,7 +183,7 @@ const PortfolioDashboard: React.FC = () => {
                 <section className="rounded-xl border border-slate-200 bg-slate-50 px-6 py-4 text-xs text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
                   <p>무료 사용자에게는 최근 3개월 거래 내역만 표시됩니다. 전체 히스토리와 확장 기능은 Pro에서 이용할 수 있어요.</p>
                   <Link
-                    to="/settings"
+                    to="/subscription"
                     className="mt-2 inline-flex w-max items-center gap-2 rounded-full border border-blue-500 px-3 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
                   >
                     Pro 업그레이드 알아보기
