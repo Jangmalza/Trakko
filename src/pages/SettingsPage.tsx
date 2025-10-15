@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import ResetPortfolioSection from '../components/ResetPortfolioSection';
 import HeaderNavigation from '../components/HeaderNavigation';
 import ConfirmResetModal from '../components/modals/ConfirmResetModal';
@@ -57,6 +57,25 @@ const SettingsPage: React.FC = () => {
   })));
   const { user, getLoginUrl, setTraderType: setUserTraderType } = useAuthStore();
   const isProUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
+  const subscriptionLabel = useMemo(() => {
+    if (!user) return '로그인 필요';
+    if (user.role === 'ADMIN') return '관리자(Pro)';
+    return user.subscriptionTier === 'PRO' ? 'Pro' : '무료';
+  }, [user]);
+  const subscriptionDescription = useMemo(() => {
+    if (!user) {
+      return 'Google 로그인 후 구독 상태와 결제 내역을 확인할 수 있습니다.';
+    }
+    return isProUser
+      ? '현재 Pro 플랜을 사용 중입니다. 모든 프리미엄 기능이 활성화되어 있습니다.'
+      : '무료 플랜을 이용 중입니다. Pro로 업그레이드하면 연간 목표와 전체 거래 히스토리 등 확장 기능을 사용할 수 있습니다.';
+  }, [user, isProUser]);
+  const subscriptionTone = useMemo(() => {
+    if (!user) return 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+    return isProUser
+      ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200'
+      : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+  }, [user, isProUser]);
   const {
     currency,
     loading: preferencesLoading,
@@ -240,6 +259,37 @@ const SettingsPage: React.FC = () => {
         </header>
 
         <div className="space-y-6">
+          <section className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">구독 상태</h2>
+                <div className="mt-2 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                  <span>현재 플랜</span>
+                  <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${subscriptionTone}`}>
+                    {subscriptionLabel}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{subscriptionDescription}</p>
+              </div>
+              {user ? (
+                <Link
+                  to="/subscription"
+                  className="inline-flex items-center gap-2 rounded-full border border-blue-500 px-4 py-2 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-300 dark:text-blue-200 dark:hover:bg-blue-300/10"
+                >
+                  구독 관리
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  Google 로그인
+                </button>
+              )}
+            </div>
+          </section>
+
           <section className="rounded border border-slate-200 bg-white p-6 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">주요 거래 유형</h2>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
