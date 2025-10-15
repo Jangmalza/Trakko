@@ -20,12 +20,32 @@ const HeaderNavigation: React.FC = () => {
   return (
     <div className="flex flex-col">
       <nav className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-950">
-        <Link
-          to="/dashboard"
-          className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100"
-        >
-          <span className="text-xl font-black tracking-[0.3em]">TRAKKO</span>
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100"
+          >
+            <span className="text-xl font-black tracking-[0.3em]">TRAKKO</span>
+          </Link>
+          <div className="hidden items-center gap-3 sm:flex">
+            <a
+              href="https://www.instagram.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              aria-label="Trakko Instagram"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="currentColor"
+              >
+                <path d="M7 2C4.243 2 2 4.243 2 7v10c0 2.757 2.243 5 5 5h10c2.757 0 5-2.243 5-5V7c0-2.757-2.243-5-5-5H7zm0 2h10c1.654 0 3 1.346 3 3v10c0 1.654-1.346 3-3 3H7c-1.654 0-3-1.346-3-3V7c0-1.654 1.346-3 3-3zm10 1a1 1 0 100 2 1 1 0 000-2zM12 7a5 5 0 100 10 5 5 0 000-10zm0 2c1.654 0 3 1.346 3 3s-1.346 3-3 3-3-1.346-3-3 1.346-3 3-3z" />
+              </svg>
+            </a>
+          </div>
+        </div>
         <div className="flex items-center gap-4 text-sm">
           <Link to="/dashboard" className="text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100">
             대시보드
