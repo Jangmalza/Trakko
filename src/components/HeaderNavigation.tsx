@@ -25,7 +25,7 @@ const HeaderNavigation: React.FC = () => {
             to="/dashboard"
             className="flex items-center gap-2 font-semibold text-slate-900 dark:text-slate-100"
           >
-            <span className="text-xl font-black tracking-[0.3em]">TRAKKO</span>
+            <span className="text-lg font-black tracking-[0.25em]">TRAKKO</span>
           </Link>
           <div className="hidden items-center gap-3 sm:flex">
             <a
