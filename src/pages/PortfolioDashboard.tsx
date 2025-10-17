@@ -1,15 +1,15 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import TradeEntryForm from '../components/TradeEntryForm';
 import SeedOverviewChart from '../components/SeedOverviewChart';
 import TradeEntriesList from '../components/TradeEntriesList';
 import HeaderNavigation from '../components/HeaderNavigation';
-import ChatAssistantPanel from '../components/ChatAssistantPanel';
 import ThemeToggleButton from '../components/ThemeToggleButton';
 import GoalProgressCard from '../components/GoalProgressCard';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useAuthStore } from '../store/authStore';
 import { useShallow } from 'zustand/react/shallow';
+import { requestPerformanceReport, type ReportGranularity } from '../api/reportsApi';
 
 const DASHBOARD_TITLE = '일일 자본 트래커';
 const DASHBOARD_SUBTITLE = '각 거래가 전체 자본에 미치는 영향을 기록하고, 결정의 근거를 남겨 다음 전략에 반영하세요.';
@@ -18,7 +18,6 @@ const LOADING_MESSAGE = '데이터를 불러오는 중입니다. 잠시만 기�
 
 const PortfolioDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const loadRequestedRef = useRef(false);
   const promoTimeoutRef = useRef<number | null>(null);
   const {
@@ -47,6 +46,54 @@ const PortfolioDashboard: React.FC = () => {
   const { user } = useAuthStore();
   const isProUser = useMemo(() => user?.role === 'ADMIN' || user?.subscriptionTier === 'PRO', [user]);
   const [tradeSavedNoticeVisible, setTradeSavedNoticeVisible] = useState(false);
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [reportSuccessVisible, setReportSuccessVisible] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportGranularity, setReportGranularity] = useState<ReportGranularity>('MONTHLY');
+  const [reportStartDate, setReportStartDate] = useState('');
+  const [reportEndDate, setReportEndDate] = useState('');
+
+  const toIsoDate = useCallback((date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const updateRangeForGranularity = useCallback((value: ReportGranularity) => {
+    const today = new Date();
+    const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    let startDate = new Date(endDate);
+
+    if (value === 'DAILY') {
+      // same-day report
+    } else if (value === 'WEEKLY') {
+      startDate = new Date(endDate);
+      const dayOfWeek = startDate.getDay();
+      const diff = dayOfWeek === 0 ? 0 : dayOfWeek;
+      startDate.setDate(startDate.getDate() - diff);
+    } else if (value === 'MONTHLY') {
+      startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+    } else {
+      // YEARLY: first day of current year
+      startDate = new Date(endDate.getFullYear(), 0, 1);
+    }
+
+    setReportStartDate(toIsoDate(startDate));
+    setReportEndDate(toIsoDate(endDate));
+  }, [toIsoDate]);
+
+  useEffect(() => {
+    if (!reportStartDate || !reportEndDate) {
+      updateRangeForGranularity(reportGranularity);
+    }
+  }, [reportGranularity, reportStartDate, reportEndDate, updateRangeForGranularity]);
+
+  useEffect(() => {
+    if (reportError !== null) {
+      setReportError(null);
+    }
+  }, [reportGranularity, reportStartDate, reportEndDate, reportError]);
 
   useEffect(() => {
     if (loadRequestedRef.current) return;
@@ -70,11 +117,25 @@ const PortfolioDashboard: React.FC = () => {
 
   const showTradeSavedNotice = () => {
     setTradeSavedNoticeVisible(true);
+    setReportSuccessVisible(false);
     if (promoTimeoutRef.current) {
       window.clearTimeout(promoTimeoutRef.current);
     }
     promoTimeoutRef.current = window.setTimeout(() => {
       setTradeSavedNoticeVisible(false);
+      setReportSuccessVisible(false);
+      promoTimeoutRef.current = null;
+    }, 4000);
+  };
+
+  const showReportSuccess = () => {
+    setReportSuccessVisible(true);
+    setTradeSavedNoticeVisible(false);
+    if (promoTimeoutRef.current) {
+      window.clearTimeout(promoTimeoutRef.current);
+    }
+    promoTimeoutRef.current = window.setTimeout(() => {
+      setReportSuccessVisible(false);
       promoTimeoutRef.current = null;
     }, 4000);
   };
@@ -115,6 +176,42 @@ const PortfolioDashboard: React.FC = () => {
     return initialSeed + priorPnL;
   }, [initialSeed, trades, isProUser]);
 
+  const handleGenerateReport = async () => {
+    if (reportGenerating) return;
+    setReportError(null);
+    if (!reportStartDate || !reportEndDate) {
+      setReportError('리포트 기간을 먼저 설정해주세요.');
+      return;
+    }
+    if (reportStartDate > reportEndDate) {
+      setReportError('시작일이 종료일보다 늦을 수 없습니다.');
+      return;
+    }
+    setReportGenerating(true);
+    try {
+      const blob = await requestPerformanceReport({
+        granularity: reportGranularity,
+        startDate: reportStartDate,
+        endDate: reportEndDate
+      });
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      const stamp = new Date().toISOString().split('T')[0];
+      anchor.download = `trakko-performance-report-${reportGranularity.toLowerCase()}-${stamp}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(objectUrl);
+      showReportSuccess();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '리포트를 생성하지 못했습니다.';
+      setReportError(message);
+    } finally {
+      setReportGenerating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <HeaderNavigation />
@@ -123,6 +220,63 @@ const PortfolioDashboard: React.FC = () => {
           <h1 className="text-3xl font-semibold">{DASHBOARD_TITLE}</h1>
           <p className="max-w-2xl text-sm text-slate-500 dark:text-slate-300">{DASHBOARD_SUBTITLE}</p>
         </header>
+
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">AI Report</p>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">AI 성과 리포트</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">기간과 집계 단위를 지정하면 맞춤형 PDF 리포트를 내려받을 수 있습니다.</p>
+            </div>
+            <div className="flex flex-col gap-4 md:items-end">
+              <div className="flex flex-col gap-3 text-xs text-slate-500 dark:text-slate-300 sm:flex-row sm:flex-wrap sm:items-center">
+                <label className="flex items-center gap-2">
+                  <span className="whitespace-nowrap font-semibold">집계 단위</span>
+                  <select
+                    value={reportGranularity}
+                    onChange={(event) => {
+                      const value = event.target.value as ReportGranularity;
+                      setReportGranularity(value);
+                      updateRangeForGranularity(value);
+                    }}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600"
+                  >
+                    <option value="DAILY">일간</option>
+                    <option value="WEEKLY">주간</option>
+                <option value="MONTHLY">월간</option>
+                <option value="YEARLY">연간</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className="whitespace-nowrap font-semibold">시작일</span>
+                  <input
+                    type="date"
+                    value={reportStartDate}
+                    onChange={(event) => setReportStartDate(event.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className="whitespace-nowrap font-semibold">종료일</span>
+                  <input
+                    type="date"
+                    value={reportEndDate}
+                    onChange={(event) => setReportEndDate(event.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:border-slate-600"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerateReport}
+                disabled={showPlaceholder || reportGenerating}
+                className="inline-flex items-center justify-center rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:disabled:bg-slate-700"
+              >
+                {reportGenerating ? '리포트 생성 중...' : 'PDF 다운로드'}
+              </button>
+            </div>
+          </div>
+        </section>
 
         {error && (
           <div
@@ -144,6 +298,23 @@ const PortfolioDashboard: React.FC = () => {
           </div>
         )}
 
+        {reportError && (
+          <div
+            className="mt-6 flex items-center justify-between gap-4 rounded border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800 shadow-sm dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span>{reportError}</span>
+            <button
+              type="button"
+              onClick={() => setReportError(null)}
+              className="text-xs font-semibold text-amber-700 underline transition hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100"
+            >
+              {ERROR_CLOSE_LABEL}
+            </button>
+          </div>
+        )}
+
         {showPlaceholder ? (
           <div className="mt-16 flex flex-col items-center gap-3 text-sm text-slate-500 dark:text-slate-300" role="status" aria-live="polite">
             <span
@@ -157,13 +328,14 @@ const PortfolioDashboard: React.FC = () => {
           <main className="mt-10 grid gap-10 lg:grid-cols-[320px_1fr]">
             <TradeEntryForm onSubmit={handleAddTrade} loading={loading} />
             <div className="space-y-8">
-              {tradeSavedNoticeVisible && (
+              {(tradeSavedNoticeVisible || reportSuccessVisible) && (
                 <section className="flex items-center justify-between rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700 shadow-sm dark:border-emerald-400/40 dark:bg-emerald-500/10 dark:text-emerald-200">
-                  <span>거래가 성공적으로 저장되었어요.</span>
+                  <span>{tradeSavedNoticeVisible ? '거래가 성공적으로 저장되었어요.' : '성과 리포트를 내려받았습니다.'}</span>
                   <button
                     type="button"
                     onClick={() => {
                       setTradeSavedNoticeVisible(false);
+                      setReportSuccessVisible(false);
                       if (promoTimeoutRef.current) {
                         window.clearTimeout(promoTimeoutRef.current);
                         promoTimeoutRef.current = null;
@@ -196,33 +368,6 @@ const PortfolioDashboard: React.FC = () => {
         )}
       </div>
       <ThemeToggleButton />
-      <button
-        type="button"
-        disabled={showPlaceholder}
-        onClick={() => setAssistantOpen(true)}
-        className={`fixed bottom-6 right-6 z-30 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 dark:focus:ring-slate-600 ${assistantOpen ? 'hidden' : ''}`}
-      >
-        <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-        AI 어시스턴트
-      </button>
-
-      {assistantOpen && (
-        <div
-          className="fixed inset-0 z-40 flex justify-end bg-slate-900/30 backdrop-blur-sm"
-          onClick={() => setAssistantOpen(false)}
-        >
-          <div
-            className="flex h-full w-full max-w-sm flex-col p-4 sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <ChatAssistantPanel
-              trades={trades}
-              initialSeed={initialSeed}
-              onClose={() => setAssistantOpen(false)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

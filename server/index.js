@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { Prisma, PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
 import multer from 'multer';
+import PDFDocument from 'pdfkit';
 
 const prisma = new PrismaClient();
 
@@ -22,6 +23,11 @@ const communityUploadsDir = path.join(uploadsRoot, 'community');
 if (!fs.existsSync(communityUploadsDir)) {
   fs.mkdirSync(communityUploadsDir, { recursive: true });
 }
+
+const fontsRoot = path.join(__dirname, 'fonts');
+const REPORT_FONT_NAME = 'TrakkoReportRegular';
+const REPORT_FONT_PATH = path.join(fontsRoot, 'NanumGothic-Regular.ttf');
+const REPORT_FONT_AVAILABLE = fs.existsSync(REPORT_FONT_PATH);
 
 const COMMUNITY_IMAGE_MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const COMMUNITY_ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -261,6 +267,242 @@ const roundCurrency = (value, currency) => {
   const fractionDigits = currency === 'KRW' ? 0 : 2;
   const factor = 10 ** fractionDigits;
   return Math.round(value * factor) / factor;
+};
+
+const decimalToNumber = (value) => {
+  if (value instanceof Prisma.Decimal) {
+    return value.toNumber();
+  }
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (value && typeof value === 'object' && typeof value.valueOf === 'function') {
+    const numeric = Number(value.valueOf());
+    return Number.isFinite(numeric) ? numeric : 0;
+  }
+  return 0;
+};
+
+const formatCurrencyForUser = (value, currency, locale) => {
+  const normalizedCurrency = normalizeCurrency(currency);
+  const resolvedLocale = locale || currencyLocales[normalizedCurrency] || defaultPreferences.locale;
+  const fractionDigits = normalizedCurrency === 'KRW' ? 0 : 2;
+  try {
+    const formatter = new Intl.NumberFormat(resolvedLocale, {
+      style: 'currency',
+      currency: normalizedCurrency,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits
+    });
+    return formatter.format(roundCurrency(value, normalizedCurrency));
+  } catch (error) {
+    console.warn('Falling back to default locale for currency formatting', { resolvedLocale, normalizedCurrency, error });
+    const fallbackFormatter = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: normalizedCurrency === 'KRW' ? 'KRW' : 'USD',
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits
+    });
+    return fallbackFormatter.format(roundCurrency(value, normalizedCurrency));
+  }
+};
+
+const formatPercentForUser = (value, locale) => {
+  if (!Number.isFinite(value)) return 'N/A';
+  const resolvedLocale = locale || defaultPreferences.locale;
+  try {
+    const formatter = new Intl.NumberFormat(resolvedLocale, {
+      style: 'percent',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    });
+    return formatter.format(value / 100);
+  } catch (error) {
+    console.warn('Falling back to default locale for percent formatting', { resolvedLocale, error });
+    const fallbackFormatter = new Intl.NumberFormat('en-US', {
+      style: 'percent',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    });
+    return fallbackFormatter.format(value / 100);
+  }
+};
+
+const formatMonthForLocale = (year, month, locale) => {
+  const resolvedLocale = locale || defaultPreferences.locale;
+  const date = new Date(year, month - 1, 1);
+  try {
+    const formatter = new Intl.DateTimeFormat(resolvedLocale, { year: 'numeric', month: 'long' });
+    return formatter.format(date);
+  } catch (error) {
+    console.warn('Falling back to default locale for month formatting', { resolvedLocale, error });
+    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long' }).format(date);
+  }
+};
+
+const formatDateForLocale = (date, locale) => {
+  const resolvedLocale = locale || defaultPreferences.locale;
+  try {
+    return new Intl.DateTimeFormat(resolvedLocale, { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
+  } catch (error) {
+    console.warn('Falling back to default locale for date formatting', { resolvedLocale, error });
+    return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
+  }
+};
+
+const PDF_THEME = {
+  primary: '#0f172a',
+  accent: '#0ea5e9',
+  accentBackground: '#f0f9ff',
+  body: '#1e293b',
+  muted: '#64748b',
+  rule: '#e2e8f0',
+  heading: '#0f172a'
+};
+
+const getContentWidth = (doc) => doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+const drawDivider = (doc) => {
+  const contentWidth = getContentWidth(doc);
+  doc.moveTo(doc.page.margins.left, doc.y)
+    .lineTo(doc.page.margins.left + contentWidth, doc.y)
+    .strokeColor(PDF_THEME.rule)
+    .lineWidth(1)
+    .stroke();
+  doc.moveDown(0.3);
+  doc.strokeColor(PDF_THEME.body);
+};
+
+const drawSectionHeading = (doc, text) => {
+  doc.moveDown(0.6);
+  doc.fillColor(PDF_THEME.heading).fontSize(13).text(text);
+  doc.moveDown(0.2);
+  drawDivider(doc);
+  doc.fillColor(PDF_THEME.body).fontSize(11);
+};
+
+const drawMetricsGrid = (doc, metrics) => {
+  const contentWidth = getContentWidth(doc);
+  const columnWidth = (contentWidth - 24) / 2;
+
+  for (let i = 0; i < metrics.length; i += 2) {
+    const left = metrics[i];
+    const right = metrics[i + 1];
+    const rowY = doc.y;
+
+    if (left) {
+      doc.fontSize(9).fillColor(PDF_THEME.muted).text(left.label, doc.page.margins.left, rowY, { width: columnWidth });
+      doc.fontSize(13).fillColor(PDF_THEME.body).text(left.value, doc.page.margins.left, doc.y, { width: columnWidth });
+    }
+
+    let rowHeight = doc.y - rowY;
+
+    if (right) {
+      const rightX = doc.page.margins.left + columnWidth + 24;
+      doc.fontSize(9).fillColor(PDF_THEME.muted).text(right.label, rightX, rowY, { width: columnWidth });
+      doc.fontSize(13).fillColor(PDF_THEME.body).text(right.value, rightX, doc.y, { width: columnWidth });
+      rowHeight = Math.max(rowHeight, doc.y - rowY);
+    }
+
+    rowHeight = Number.isFinite(rowHeight) && rowHeight > 0 ? rowHeight : 24;
+    doc.y = rowY + rowHeight + 10;
+  }
+
+  doc.fillColor(PDF_THEME.body).fontSize(11);
+  doc.moveDown(0.1);
+};
+
+
+const ensurePageSpace = (doc, requiredHeight = 80) => {
+  const remaining = doc.page.height - doc.page.margins.bottom - doc.y;
+  if (remaining < requiredHeight) {
+    doc.addPage();
+    doc.fillColor(PDF_THEME.body).fontSize(11);
+  }
+};
+
+const REPORT_GRANULARITY_VALUES = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+const REPORT_GRANULARITY_SET = new Set(REPORT_GRANULARITY_VALUES);
+
+const normalizeReportGranularity = (value) => {
+  if (typeof value !== 'string') return 'MONTHLY';
+  const upper = value.toUpperCase();
+  return REPORT_GRANULARITY_SET.has(upper) ? upper : 'MONTHLY';
+};
+
+const parseDateOnly = (value) => {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return null;
+  }
+
+  const parts = value.split('-').map(Number);
+  if (parts.length !== 3) {
+    return null;
+  }
+
+  const [year, month, day] = parts;
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const buildDefaultReportRange = (granularity) => {
+  const today = new Date();
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let start = new Date(end);
+
+  switch (granularity) {
+    case 'DAILY':
+      break;
+    case 'WEEKLY': {
+      start = new Date(end);
+      const dayOfWeek = start.getDay();
+      const diff = dayOfWeek; // Sunday=0
+      start.setDate(start.getDate() - diff);
+      break;
+    }
+    case 'MONTHLY':
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+      break;
+    case 'YEARLY':
+      start = new Date(end.getFullYear(), 0, 1);
+      break;
+    default:
+      start = new Date(end.getFullYear(), end.getMonth(), 1);
+  }
+
+  return { start, end };
+};
+
+const formatReportGroupLabel = (group, granularity, locale) => {
+  const effectiveLocale = locale || defaultPreferences.locale;
+  if (granularity === 'DAILY' && group.date) {
+    return formatDateForLocale(group.date, effectiveLocale);
+  }
+  if (granularity === 'MONTHLY' && Number.isInteger(group.year) && Number.isInteger(group.month)) {
+    return formatMonthForLocale(group.year, group.month, effectiveLocale);
+  }
+  if (Number.isInteger(group.year)) {
+    try {
+      return new Intl.DateTimeFormat(effectiveLocale, { year: 'numeric' }).format(new Date(group.year, 0, 1));
+    } catch (error) {
+      console.warn('Falling back to default locale for year formatting', { effectiveLocale, error });
+      return new Intl.DateTimeFormat('en-US', { year: 'numeric' }).format(new Date(group.year, 0, 1));
+    }
+  }
+  return '';
 };
 
 class AssistantError extends Error {
@@ -1882,6 +2124,500 @@ app.post('/api/chat/assistant', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/reports/performance', requireAuth, async (req, res) => {
+  const sessionUser = req.user;
+  if (!sessionUser?.id) {
+    return res.status(401).json({ message: '인증 정보가 올바르지 않습니다.' });
+  }
+
+  try {
+    await ensureUserRecord(sessionUser);
+
+    const body = req.body ?? {};
+    const granularity = normalizeReportGranularity(body.granularity);
+    const requestedStart = parseDateOnly(body.startDate);
+    const requestedEnd = parseDateOnly(body.endDate);
+    const defaultRange = buildDefaultReportRange(granularity);
+    const rangeStart = requestedStart ?? defaultRange.start;
+    const rangeEnd = requestedEnd ?? defaultRange.end;
+
+    const rangeStartBound = new Date(rangeStart);
+    rangeStartBound.setHours(0, 0, 0, 0);
+    const rangeEndBound = new Date(rangeEnd);
+    rangeEndBound.setHours(23, 59, 59, 999);
+
+    if (rangeStartBound > rangeEndBound) {
+      return res.status(400).json({ message: '시작일이 종료일보다 늦을 수 없습니다.' });
+    }
+
+    const tradeDateFilter = {};
+    if (!Number.isNaN(rangeStartBound.getTime())) {
+      tradeDateFilter.gte = rangeStartBound;
+    }
+    if (!Number.isNaN(rangeEndBound.getTime())) {
+      tradeDateFilter.lte = rangeEndBound;
+    }
+
+    const tradeWhere = {
+      userId: sessionUser.id,
+      ...(Object.keys(tradeDateFilter).length > 0 ? { tradeDate: tradeDateFilter } : {})
+    };
+
+    const [userRecord, trades, goals, priorPnLAggregate, cumulativePnLAggregate] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: sessionUser.id },
+        select: {
+          displayName: true,
+          email: true,
+          initialSeed: true,
+          baseCurrency: true,
+          traderType: true,
+          preferences: {
+            select: {
+              currency: true,
+              locale: true
+            }
+          }
+        }
+      }),
+      prisma.trade.findMany({
+        where: tradeWhere,
+        orderBy: { tradeDate: 'asc' }
+      }),
+      prisma.performanceGoal.findMany({
+        where: { userId: sessionUser.id },
+        orderBy: [{ updatedAt: 'desc' }],
+        take: 1
+      }),
+      prisma.trade.aggregate({
+        where: {
+          userId: sessionUser.id,
+          tradeDate: { lt: rangeStartBound }
+        },
+        _sum: { profitLoss: true }
+      }),
+      prisma.trade.aggregate({
+        where: {
+          userId: sessionUser.id,
+          tradeDate: { lte: rangeEndBound }
+        },
+        _sum: { profitLoss: true }
+      })
+    ]);
+
+    if (!userRecord) {
+      return res.status(404).json({ message: '사용자 정보를 찾을 수 없습니다.' });
+    }
+
+    const baseCurrency = normalizeCurrency(userRecord.baseCurrency ?? BASE_CURRENCY);
+    const preferredCurrency = userRecord.preferences?.currency ?? baseCurrency ?? defaultPreferences.currency;
+    const normalizedCurrency = normalizeCurrency(preferredCurrency);
+    const resolvedLocale = userRecord.preferences?.locale ?? currencyLocales[normalizedCurrency] ?? defaultPreferences.locale;
+
+    const hasInitialSeed = userRecord.initialSeed !== null && userRecord.initialSeed !== undefined;
+    const baseInitialSeed = decimalToNumber(userRecord.initialSeed);
+    const priorPnL = decimalToNumber(priorPnLAggregate._sum?.profitLoss ?? 0);
+    const cumulativePnL = decimalToNumber(cumulativePnLAggregate._sum?.profitLoss ?? 0);
+
+    let totalPnL = 0;
+    let wins = 0;
+    let losses = 0;
+
+    let bestTrade = null;
+    let worstTrade = null;
+
+    const groupMap = new Map();
+
+    for (const trade of trades) {
+      const pnl = decimalToNumber(trade.profitLoss);
+      totalPnL += pnl;
+
+      if (pnl >= 0) {
+        wins += 1;
+      } else {
+        losses += 1;
+      }
+
+      if (!bestTrade || pnl > bestTrade.pnl) {
+        bestTrade = {
+          ticker: trade.ticker,
+          tradeDate: trade.tradeDate,
+          pnl
+        };
+      }
+
+      if (!worstTrade || pnl < worstTrade.pnl) {
+        worstTrade = {
+          ticker: trade.ticker,
+          tradeDate: trade.tradeDate,
+          pnl
+        };
+      }
+
+      const tradeDate = new Date(trade.tradeDate);
+      if (Number.isNaN(tradeDate.getTime())) {
+        continue;
+      }
+      tradeDate.setHours(0, 0, 0, 0);
+
+      let groupKey;
+      let sortValue;
+      let seed = {};
+
+      if (granularity === 'DAILY') {
+        sortValue = tradeDate.getTime();
+        groupKey = sortValue;
+        seed = { date: new Date(tradeDate) };
+      } else if (granularity === 'MONTHLY') {
+        const year = tradeDate.getFullYear();
+        const month = tradeDate.getMonth() + 1;
+        groupKey = `${year}-${month}`;
+        sortValue = year * 100 + month;
+        seed = { year, month };
+      } else {
+        const year = tradeDate.getFullYear();
+        groupKey = `${year}`;
+        sortValue = year;
+        seed = { year };
+      }
+
+      const existing = groupMap.get(groupKey) ?? {
+        ...seed,
+        pnl: 0,
+        trades: 0,
+        wins: 0,
+        losses: 0,
+        sortValue
+      };
+      existing.pnl += pnl;
+      existing.trades += 1;
+      if (pnl >= 0) {
+        existing.wins += 1;
+      } else {
+        existing.losses += 1;
+      }
+      groupMap.set(groupKey, existing);
+    }
+
+    const periodPnL = totalPnL;
+    const totalTrades = trades.length;
+    const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : null;
+    const periodStartCapital = baseInitialSeed + priorPnL;
+    const periodEndCapital = baseInitialSeed + cumulativePnL;
+
+    const groupSummaries = Array.from(groupMap.values()).sort((a, b) => a.sortValue - b.sortValue);
+    const maxGroups = (() => {
+      switch (granularity) {
+        case 'DAILY':
+          return 31;
+        case 'WEEKLY':
+          return 12;
+        case 'MONTHLY':
+          return 12;
+        default:
+          return 5;
+      }
+    })();
+    const limitedGroupSummaries = groupSummaries.slice(-maxGroups);
+
+    const granularityLabel = (() => {
+      switch (granularity) {
+        case 'DAILY':
+          return '일간';
+        case 'WEEKLY':
+          return '주간';
+        case 'YEARLY':
+          return '연간';
+        default:
+          return '월간';
+      }
+    })();
+
+    const rangeStartDate = new Date(rangeStartBound.getFullYear(), rangeStartBound.getMonth(), rangeStartBound.getDate());
+    const rangeEndDate = new Date(rangeEndBound.getFullYear(), rangeEndBound.getMonth(), rangeEndBound.getDate());
+
+    const latestGoal = goals[0] ?? null;
+
+    const convertToDisplay = (value) => convertAmount(value, baseCurrency, normalizedCurrency);
+
+    const [
+      initialSeedDisplay,
+      periodStartCapitalDisplay,
+      periodEndCapitalDisplay,
+      periodPnLDisplay,
+      cumulativePnLDisplay
+    ] = await Promise.all([
+      hasInitialSeed ? convertToDisplay(baseInitialSeed) : Promise.resolve(null),
+      convertToDisplay(periodStartCapital),
+      convertToDisplay(periodEndCapital),
+      convertToDisplay(periodPnL),
+      convertToDisplay(cumulativePnL)
+    ]);
+
+    const bestTradeDisplayPnL = bestTrade ? await convertToDisplay(bestTrade.pnl) : null;
+    const worstTradeDisplayPnL = worstTrade ? await convertToDisplay(worstTrade.pnl) : null;
+
+    const limitedGroupSummariesDisplay = await Promise.all(
+      limitedGroupSummaries.map(async (entry) => ({
+        ...entry,
+        displayPnl: await convertToDisplay(entry.pnl)
+      }))
+    );
+    const latestGoalAmountBase = latestGoal ? decimalToNumber(latestGoal.targetAmount) : null;
+    const latestGoalAmountDisplay = latestGoalAmountBase !== null ? await convertToDisplay(latestGoalAmountBase) : null;
+
+    let aiInsights = null;
+
+    if (openaiClient) {
+      const groupHighlights = limitedGroupSummariesDisplay
+        .map((entry) => {
+          const label = formatReportGroupLabel(entry, granularity, resolvedLocale);
+          const pnlText = formatCurrencyForUser(entry.displayPnl, normalizedCurrency, resolvedLocale);
+          const tradesText = `${entry.trades}건`;
+          const winRatioText = entry.trades > 0 ? `${Math.round((entry.wins / entry.trades) * 100)}%` : '데이터 없음';
+          return `${label} — 손익 ${pnlText}, 거래 ${tradesText}, 승률 ${winRatioText}`;
+        })
+        .join('\n');
+
+      const highlightLines = [];
+      if (bestTrade && bestTradeDisplayPnL !== null) {
+        const bestDate = formatDateForLocale(new Date(bestTrade.tradeDate), resolvedLocale);
+        highlightLines.push(
+          `최고 거래: ${bestTrade.ticker} (${bestDate}) 손익 ${formatCurrencyForUser(bestTradeDisplayPnL, normalizedCurrency, resolvedLocale)}`
+        );
+      }
+      if (worstTrade && worstTradeDisplayPnL !== null) {
+        const worstDate = formatDateForLocale(new Date(worstTrade.tradeDate), resolvedLocale);
+        highlightLines.push(
+          `어려웠던 거래: ${worstTrade.ticker} (${worstDate}) 손익 ${formatCurrencyForUser(worstTradeDisplayPnL, normalizedCurrency, resolvedLocale)}`
+        );
+      }
+
+      const aiContext = [
+        `기간: ${formatDateForLocale(rangeStartDate, resolvedLocale)} ~ ${formatDateForLocale(rangeEndDate, resolvedLocale)}`,
+        `집계 단위: ${granularityLabel}`,
+        `기간 시작 자본: ${formatCurrencyForUser(periodStartCapitalDisplay, normalizedCurrency, resolvedLocale)}`,
+        `기간 종료 자본: ${formatCurrencyForUser(periodEndCapitalDisplay, normalizedCurrency, resolvedLocale)}`,
+        `기간 손익: ${formatCurrencyForUser(periodPnLDisplay, normalizedCurrency, resolvedLocale)}`,
+        `누적 손익(전체): ${formatCurrencyForUser(cumulativePnLDisplay, normalizedCurrency, resolvedLocale)}`,
+        `총 거래 수: ${totalTrades}`,
+        `승수/패수: ${wins} / ${losses}`,
+        `승률: ${winRate !== null ? formatPercentForUser(winRate, resolvedLocale) : '데이터 없음'}`,
+        latestGoal
+          ? `설정된 목표: ${latestGoal.period === 'ANNUAL' ? '연간' : '월간'} 기준 ${formatCurrencyForUser(latestGoalAmountDisplay ?? 0, normalizedCurrency, resolvedLocale)}`
+          : '설정된 목표 없음'
+      ].join('\n');
+
+      const aiMessages = [
+        {
+          role: 'system',
+          content: [
+            'You are Trakko, an AI analyst for trading performance reports.',
+            'Respond in Korean with concise paragraphs (no bullet lists).',
+            'Include headings such as "[요약]", "[성과 분석]", "[다음 전략]" to structure the response.',
+            'Focus on risk management, repeatable strengths, and actionable improvements.',
+            'If data is insufficient, mention what additional information would help.',
+            'Keep the entire response under 250 Korean characters per section if possible.'
+          ].join(' ')
+        },
+        {
+          role: 'system',
+          content: [
+            '성과 데이터 개요:',
+            aiContext,
+            groupHighlights ? `구간별 요약:\n${groupHighlights}` : '구간별 데이터가 충분하지 않습니다.',
+            highlightLines.length > 0 ? `주요 거래:\n${highlightLines.join('\n')}` : '주요 거래 데이터를 찾을 수 없습니다.'
+          ].join('\n')
+        },
+        {
+          role: 'user',
+          content: '위 데이터를 기반으로 짧은 성과 요약과 개선 아이디어를 작성해주세요.'
+        }
+      ];
+
+      try {
+        aiInsights = await createAssistantReply(aiMessages);
+      } catch (aiError) {
+        console.error('Failed to generate AI insights for performance report', aiError);
+        aiInsights = 'AI 인사이트 생성에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      }
+    } else {
+      aiInsights = 'AI 인사이트를 생성하려면 OpenAI API 설정이 필요합니다.';
+    }
+
+    const doc = new PDFDocument({ margin: 50 });
+    let activeReportFont = 'Helvetica';
+    if (REPORT_FONT_AVAILABLE) {
+      try {
+        doc.registerFont(REPORT_FONT_NAME, REPORT_FONT_PATH);
+        activeReportFont = REPORT_FONT_NAME;
+      } catch (fontError) {
+        console.warn('Failed to register report font', fontError);
+      }
+    }
+    doc.font(activeReportFont);
+    const todayStamp = new Date().toISOString().split('T')[0];
+    const filename = `trakko-performance-report-${todayStamp}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    doc.pipe(res);
+
+    const generatedAt = new Intl.DateTimeFormat(resolvedLocale, {
+      dateStyle: 'long',
+      timeStyle: 'short'
+    }).format(new Date());
+
+    const displayName = userRecord.displayName || userRecord.email || sessionUser.displayName || 'Trakko User';
+    const periodStartLabel = formatDateForLocale(rangeStartDate, resolvedLocale);
+    const periodEndLabel = formatDateForLocale(rangeEndDate, resolvedLocale);
+    const contentWidth = getContentWidth(doc);
+
+    // Banner
+    const bannerHeight = 68;
+    const bannerX = doc.page.margins.left;
+    const bannerY = doc.y;
+    doc.save();
+    doc.roundedRect(bannerX, bannerY, contentWidth, bannerHeight, 12).fill(PDF_THEME.primary);
+    doc.fillColor('#ffffff')
+      .fontSize(20)
+      .text('Trakko Performance Report', bannerX + 18, bannerY + 18, { width: contentWidth - 36 });
+    doc.fontSize(12).text(`${periodStartLabel} ~ ${periodEndLabel}`, { width: contentWidth - 36 });
+    doc.restore();
+    doc.y = bannerY + bannerHeight + 18;
+
+    doc.fillColor(PDF_THEME.muted).fontSize(10).text(`생성 시각: ${generatedAt}`);
+    doc.text(`기본 통화: ${normalizedCurrency} · 거래 유형: ${userRecord.traderType ?? 'UNKNOWN'}`);
+    doc.moveDown(0.4);
+    drawDivider(doc);
+
+    const summaryMetrics = [
+      {
+        label: '초기 시드 (설정)',
+        value: hasInitialSeed && initialSeedDisplay !== null
+          ? formatCurrencyForUser(initialSeedDisplay, normalizedCurrency, resolvedLocale)
+          : '입력되지 않음'
+      },
+      {
+        label: '기간 시작 자본',
+        value: formatCurrencyForUser(periodStartCapitalDisplay, normalizedCurrency, resolvedLocale)
+      },
+      {
+        label: '기간 종료 자본',
+        value: formatCurrencyForUser(periodEndCapitalDisplay, normalizedCurrency, resolvedLocale)
+      },
+      {
+        label: '기간 손익',
+        value: formatCurrencyForUser(periodPnLDisplay, normalizedCurrency, resolvedLocale)
+      },
+      {
+        label: '총 거래 수',
+        value: `${totalTrades}건`
+      },
+      {
+        label: '승률',
+        value: winRate !== null ? formatPercentForUser(winRate, resolvedLocale) : '데이터 없음'
+      }
+    ];
+
+    ensurePageSpace(doc, 180);
+    drawSectionHeading(doc, '핵심 지표');
+    drawMetricsGrid(doc, summaryMetrics);
+
+    ensurePageSpace(doc, 140);
+    drawSectionHeading(doc, '목표 상태');
+    if (latestGoal) {
+      const goalPeriodLabel = latestGoal.period === 'ANNUAL'
+        ? `${latestGoal.targetYear}년 연간 목표`
+        : `${latestGoal.targetYear}년 ${latestGoal.targetMonth}월 목표`;
+      doc.fillColor(PDF_THEME.body).text(`목표 구간: ${goalPeriodLabel}`);
+      doc.text(`목표 금액: ${formatCurrencyForUser(latestGoalAmountDisplay ?? 0, normalizedCurrency, resolvedLocale)}`);
+      doc.text(`목표 통화: ${latestGoal.currency}`);
+    } else {
+      doc.fillColor(PDF_THEME.muted).text('설정된 목표가 없습니다. 목표를 추가해 진행 상황을 추적해 보세요.');
+    }
+    doc.fillColor(PDF_THEME.body).moveDown(0.3);
+
+    ensurePageSpace(doc, 200);
+    drawSectionHeading(doc, 'AI 인사이트');
+    aiInsights
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .forEach((line) => {
+        doc.fillColor(PDF_THEME.body).text(line);
+        doc.moveDown(0.2);
+      });
+    doc.moveDown(0.25);
+
+    const groupSectionTitle = (() => {
+      switch (granularity) {
+        case 'DAILY':
+          return '구간별 성과 (일간)';
+        case 'WEEKLY':
+          return '구간별 성과 (주간)';
+        case 'YEARLY':
+          return '구간별 성과 (연간)';
+        default:
+          return '구간별 성과 (월간)';
+      }
+    })();
+
+    ensurePageSpace(doc, 160);
+    drawSectionHeading(doc, groupSectionTitle);
+    if (limitedGroupSummariesDisplay.length === 0) {
+      doc.fillColor(PDF_THEME.muted).text('선택한 기간에 해당하는 거래 데이터가 없습니다.');
+    } else {
+      limitedGroupSummariesDisplay.forEach((entry) => {
+        const label = formatReportGroupLabel(entry, granularity, resolvedLocale);
+        const pnlFormatted = formatCurrencyForUser(entry.displayPnl, normalizedCurrency, resolvedLocale);
+        const entryWinPercent = entry.trades > 0
+          ? formatPercentForUser((entry.wins / entry.trades) * 100, resolvedLocale)
+          : '데이터 없음';
+        doc.fillColor(PDF_THEME.body).text(`• ${label} | 손익 ${pnlFormatted} · 거래 ${entry.trades}건 · 승률 ${entryWinPercent}`);
+        doc.moveDown(0.2);
+      });
+      if (groupSummaries.length > limitedGroupSummaries.length) {
+        doc.moveDown(0.2);
+        doc.fillColor(PDF_THEME.muted).fontSize(9).text('※ 전체 기간이 길어 최근 구간만 요약해 표시했습니다.');
+        doc.fontSize(11).fillColor(PDF_THEME.body);
+      }
+    }
+    doc.moveDown(0.3);
+
+    ensurePageSpace(doc, 120);
+    drawSectionHeading(doc, '주요 거래');
+    if ((!bestTrade || bestTradeDisplayPnL === null) && (!worstTrade || worstTradeDisplayPnL === null)) {
+      doc.fillColor(PDF_THEME.muted).text('분석할 거래가 아직 없습니다.');
+    } else {
+      if (bestTrade && bestTradeDisplayPnL !== null) {
+        const bestDate = formatDateForLocale(new Date(bestTrade.tradeDate), resolvedLocale);
+        doc.fillColor(PDF_THEME.body).text(`• 최고 거래: ${bestTrade.ticker} (${bestDate}) · 손익 ${formatCurrencyForUser(bestTradeDisplayPnL, normalizedCurrency, resolvedLocale)}`);
+        doc.moveDown(0.2);
+      }
+      if (worstTrade && worstTradeDisplayPnL !== null) {
+        const worstDate = formatDateForLocale(new Date(worstTrade.tradeDate), resolvedLocale);
+        doc.fillColor(PDF_THEME.body).text(`• 어려웠던 거래: ${worstTrade.ticker} (${worstDate}) · 손익 ${formatCurrencyForUser(worstTradeDisplayPnL, normalizedCurrency, resolvedLocale)}`);
+        doc.moveDown(0.2);
+      }
+    }
+
+    doc.moveDown(0.4);
+    doc.fillColor(PDF_THEME.muted).fontSize(9).text('본 리포트는 정보 제공 목적의 AI 분석으로, 최종 투자 판단과 책임은 사용자에게 있습니다.');
+
+    doc.end();
+  } catch (error) {
+    console.error('Failed to generate performance report', error);
+    const errorMessage = error instanceof Error ? error.message : '성과 리포트를 생성하지 못했습니다.';
+    if (!res.headersSent) {
+      res.status(500).json({ message: errorMessage });
+    } else {
+      res.end();
+    }
+  }
+});
+
 app.post('/api/auth/logout', (req, res, next) => {
   req.logout((logoutError) => {
     if (logoutError) {
@@ -2169,5 +2905,3 @@ process.on('SIGTERM', async () => {
   await prisma.$disconnect();
   process.exit(0);
 });
-
-
