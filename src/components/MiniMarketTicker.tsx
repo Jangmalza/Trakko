@@ -8,16 +8,17 @@ type MarketMetric = {
   value: number | null;
   unit?: string;
   change: number | null;
+  trend: 'up' | 'down' | null;
 };
 
 const BASE_MARKETS: MarketMetric[] = [
-  { id: 'btc', label: '비트코인 (BTC)', value: null, unit: 'USD', change: null },
-  { id: 'eth', label: '이더리움 (ETH)', value: null, unit: 'USD', change: null },
-  { id: 'sp500', label: 'S&P 500', value: null, unit: undefined, change: null },
-  { id: 'nasdaq', label: '나스닥 지수', value: null, unit: undefined, change: null },
-  { id: 'dji', label: '다우존스', value: null, unit: undefined, change: null },
-  { id: 'nasdaq_futures', label: '나스닥 선물', value: null, unit: undefined, change: null },
-  { id: 'nikkei', label: '니케이 225', value: null, unit: undefined, change: null }
+  { id: 'btc', label: '비트코인 (BTC)', value: null, unit: 'USD', change: null, trend: null },
+  { id: 'eth', label: '이더리움 (ETH)', value: null, unit: 'USD', change: null, trend: null },
+  { id: 'sp500', label: 'S&P 500', value: null, unit: undefined, change: null, trend: null },
+  { id: 'nasdaq', label: '나스닥 지수', value: null, unit: undefined, change: null, trend: null },
+  { id: 'dji', label: '다우존스', value: null, unit: undefined, change: null, trend: null },
+  { id: 'nasdaq_futures', label: '나스닥 선물', value: null, unit: undefined, change: null, trend: null },
+  { id: 'nikkei', label: '니케이 225', value: null, unit: undefined, change: null, trend: null }
 ];
 
 const formatValue = (market: MarketMetric): string => {
@@ -45,35 +46,62 @@ const formatValue = (market: MarketMetric): string => {
 
 const MiniMarketTicker: React.FC = () => {
   const [markets, setMarkets] = useState<MarketMetric[]>(BASE_MARKETS);
-  const intervalDelay = useMemo(() => 60_000, []);
+  const intervalDelay = useMemo(() => 10_000, []);
 
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
+    let trendResetTimer: number | undefined;
 
-    const mergeQuotes = (quotes: MarketQuote[]) => {
-      const map = new Map(quotes.map((quote) => [quote.id, quote]));
+    const mergeQuotes = (previous: MarketMetric[], quotes: MarketQuote[]) => {
+      const prevMap = new Map(previous.map((item) => [item.id, item]));
+      const quoteMap = new Map(quotes.map((quote) => [quote.id, quote]));
+
       return BASE_MARKETS.map((base) => {
-        const quote = map.get(base.id);
-        const value =
-          typeof quote?.price === 'number' && Number.isFinite(quote.price) ? quote.price : base.value;
-        const change =
+        const prev = prevMap.get(base.id) ?? base;
+        const quote = quoteMap.get(base.id);
+        const nextValue =
+          typeof quote?.price === 'number' && Number.isFinite(quote.price) ? quote.price : prev.value;
+        const nextChange =
           typeof quote?.changePercent === 'number' && Number.isFinite(quote.changePercent)
             ? quote.changePercent
-            : base.change;
+            : prev.change;
+
+        let trend: MarketMetric['trend'] = null;
+        if (Number.isFinite(nextValue) && Number.isFinite(prev.value) && nextValue !== prev.value) {
+          trend = (nextValue as number) > (prev.value as number) ? 'up' : 'down';
+        }
+
         return {
           ...base,
-          value,
-          change
-        };
+          value: nextValue,
+          change: nextChange,
+          trend
+        } satisfies MarketMetric;
       });
     };
 
     const load = async () => {
       try {
         const quotes = await fetchMarketQuotes();
-        if (!cancelled) {
-          setMarkets(mergeQuotes(quotes));
+        if (cancelled) return;
+
+        let shouldResetTrend = false;
+        setMarkets((current) => {
+          const merged = mergeQuotes(current, quotes);
+          shouldResetTrend = merged.some((market) => market.trend !== null);
+          return merged;
+        });
+
+        if (!cancelled && shouldResetTrend) {
+          if (trendResetTimer) {
+            window.clearTimeout(trendResetTimer);
+          }
+          trendResetTimer = window.setTimeout(() => {
+            setMarkets((current) =>
+              current.map((market) => (market.trend ? { ...market, trend: null } : market))
+            );
+          }, 1000);
         }
       } catch (error) {
         console.warn('Failed to load market quotes', error);
@@ -90,6 +118,9 @@ const MiniMarketTicker: React.FC = () => {
       cancelled = true;
       if (timer) {
         window.clearTimeout(timer);
+      }
+      if (trendResetTimer) {
+        window.clearTimeout(trendResetTimer);
       }
     };
   }, [intervalDelay]);
@@ -108,11 +139,20 @@ const MiniMarketTicker: React.FC = () => {
             ? `${isUp ? '+' : ''}${(market.change as number).toFixed(2)}%`
             : '—';
 
+          const flashClass =
+            market.trend === 'up'
+              ? 'bg-emerald-100/70 dark:bg-emerald-500/20'
+              : market.trend === 'down'
+                ? 'bg-rose-100/70 dark:bg-rose-500/20'
+                : '';
+
           return (
             <div key={market.id} className="flex flex-col items-center leading-tight sm:text-xs text-[11px]">
               <span className="font-semibold text-slate-900 dark:text-slate-100">{market.label}</span>
-              <span className="text-slate-600 dark:text-slate-300">
-                {formatValue(market)}{' '}
+              <span
+                className={`mt-0.5 inline-flex items-center gap-1 rounded px-2 py-0.5 text-slate-600 transition-colors duration-500 dark:text-slate-300 ${flashClass}`}
+              >
+                {formatValue(market)}
                 <span className={changeClass}>{changeText}</span>
               </span>
             </div>

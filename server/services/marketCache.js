@@ -2,7 +2,7 @@ import { execFile } from 'child_process';
 import path from 'path';
 
 const SCRIPT_PATH = path.resolve('scripts', 'google_finance_scraper.py');
-const REFRESH_INTERVAL_MS = 60 * 1000; // 1 minute
+const REFRESH_INTERVAL_MS = 10 * 1000; // 10 seconds
 
 let cache = { quotes: [], fetchedAt: null };
 let refreshing = false;
