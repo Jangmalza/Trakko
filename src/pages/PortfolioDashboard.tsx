@@ -52,6 +52,7 @@ const PortfolioDashboard: React.FC = () => {
   const [reportGranularity, setReportGranularity] = useState<ReportGranularity>('MONTHLY');
   const [reportStartDate, setReportStartDate] = useState('');
   const [reportEndDate, setReportEndDate] = useState('');
+  const [reportStage, setReportStage] = useState('');
 
   const toIsoDate = useCallback((date: Date) => {
     const year = date.getFullYear();
@@ -190,6 +191,7 @@ const PortfolioDashboard: React.FC = () => {
       setReportError('시작일이 종료일보다 늦을 수 없습니다.');
       return;
     }
+    setReportStage('AI 인사이트를 정리하고 있습니다...');
     setReportGenerating(true);
     try {
       const blob = await requestPerformanceReport({
@@ -197,6 +199,7 @@ const PortfolioDashboard: React.FC = () => {
         startDate: reportStartDate,
         endDate: reportEndDate
       });
+      setReportStage('PDF 다운로드를 준비하고 있습니다...');
       const objectUrl = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
@@ -211,6 +214,7 @@ const PortfolioDashboard: React.FC = () => {
       const message = err instanceof Error ? err.message : '리포트를 생성하지 못했습니다.';
       setReportError(message);
     } finally {
+      setReportStage('');
       setReportGenerating(false);
     }
   };
@@ -376,6 +380,22 @@ const PortfolioDashboard: React.FC = () => {
         )}
       </div>
       <ThemeToggleButton />
+      {reportGenerating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="flex w-80 flex-col items-center gap-4 rounded-2xl bg-white/95 px-6 py-6 text-center shadow-xl dark:bg-slate-900/95">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-slate-200 border-t-slate-900 text-slate-900 animate-spin dark:border-slate-700 dark:border-t-slate-100 dark:text-slate-100" />
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              {reportStage || 'AI 성과 리포트를 생성하고 있습니다...'}
+            </p>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+              <div className="h-full w-full animate-pulse rounded-full bg-slate-900/80 dark:bg-slate-100/80" />
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              잠시만 기다려주세요. 생성이 완료되면 PDF가 자동으로 내려받아집니다.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -526,7 +526,7 @@ async function createAssistantReply(messages) {
   try {
     const response = await openaiClient.responses.create({
       model: OPENAI_MODEL,
-      max_output_tokens: 600,
+      max_output_tokens: 2000,
       input: messages
     });
 
@@ -558,7 +558,7 @@ async function createAssistantReply(messages) {
   try {
     const completion = await openaiClient.chat.completions.create({
       model: OPENAI_MODEL,
-      max_completion_tokens: 600,
+      max_completion_tokens: 2000,
       messages
     });
 
