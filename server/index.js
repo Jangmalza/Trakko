@@ -378,17 +378,22 @@ const drawDivider = (doc) => {
 };
 
 const drawSectionHeading = (doc, text) => {
-  doc.moveDown(0.25);
+  doc.moveDown(0.35);
   doc.fillColor(PDF_THEME.heading).fontSize(11).text(text);
+  drawDivider(doc);
   doc.fillColor(PDF_THEME.body).fontSize(10);
-  doc.moveDown(0.1);
 };
 
 const drawMetricsGrid = (doc, metrics) => {
   metrics.forEach((metric) => {
     doc.fontSize(8.5).fillColor(PDF_THEME.muted).text(metric.label);
-    doc.fontSize(11).fillColor(PDF_THEME.body).text(metric.value);
-    doc.moveDown(0.2);
+    doc.fontSize(11).fillColor(PDF_THEME.body).text(metric.value, {
+      indent: 10
+    });
+    if (metric.note) {
+      doc.fontSize(8).fillColor(PDF_THEME.muted).text(metric.note, { indent: 10 });
+    }
+    doc.moveDown(0.25);
   });
 
   doc.fillColor(PDF_THEME.body).fontSize(10);
@@ -2339,6 +2344,24 @@ app.post('/api/reports/performance', requireAuth, async (req, res) => {
     doc.text(`기본 통화: ${normalizedCurrency} · 거래 유형: ${userRecord.traderType ?? 'UNKNOWN'}`);
     drawDivider(doc);
 
+    const makeSignedPercentText = (percent) => {
+      if (!Number.isFinite(percent)) return null;
+      const base = formatPercentForUser(Math.abs(percent), resolvedLocale);
+      const normalized = base.startsWith('-') ? base.slice(1) : base;
+      return `${percent >= 0 ? '+' : '-'}${normalized}`;
+    };
+
+    const periodReturnPercent = Number.isFinite(periodStartCapitalDisplay) && periodStartCapitalDisplay !== 0
+      ? ((periodEndCapitalDisplay - periodStartCapitalDisplay) / Math.abs(periodStartCapitalDisplay)) * 100
+      : null;
+    const cumulativeReturnPercent = hasInitialSeed && Number.isFinite(initialSeedDisplay) && initialSeedDisplay !== 0
+      ? ((periodEndCapitalDisplay - initialSeedDisplay) / Math.abs(initialSeedDisplay)) * 100
+      : null;
+
+    const periodReturnNote = makeSignedPercentText(periodReturnPercent);
+    const cumulativeReturnNote = makeSignedPercentText(cumulativeReturnPercent);
+    const winLossNote = totalTrades > 0 ? `승 ${wins} · 패 ${losses}` : undefined;
+
     const summaryMetrics = [
       {
         label: '기간 시작 자본',
@@ -2346,19 +2369,23 @@ app.post('/api/reports/performance', requireAuth, async (req, res) => {
       },
       {
         label: '기간 종료 자본',
-        value: formatCurrencyForUser(periodEndCapitalDisplay, normalizedCurrency, resolvedLocale)
+        value: formatCurrencyForUser(periodEndCapitalDisplay, normalizedCurrency, resolvedLocale),
+        note: periodReturnNote ? `전 기간 대비 ${periodReturnNote}` : undefined
       },
       {
         label: '기간 손익',
-        value: formatCurrencyForUser(periodPnLDisplay, normalizedCurrency, resolvedLocale)
+        value: formatCurrencyForUser(periodPnLDisplay, normalizedCurrency, resolvedLocale),
+        note: periodReturnNote ? `기간 수익률 ${periodReturnNote}` : undefined
       },
       {
         label: '누적 손익',
-        value: formatCurrencyForUser(cumulativePnLDisplay, normalizedCurrency, resolvedLocale)
+        value: formatCurrencyForUser(cumulativePnLDisplay, normalizedCurrency, resolvedLocale),
+        note: cumulativeReturnNote ? `초기 시드 대비 ${cumulativeReturnNote}` : undefined
       },
       {
         label: '총 거래 수',
-        value: `${totalTrades}건`
+        value: `${totalTrades}건`,
+        note: winLossNote
       },
       {
         label: '승률',
