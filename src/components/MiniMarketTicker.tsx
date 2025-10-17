@@ -16,6 +16,7 @@ const BASE_MARKETS: MarketMetric[] = [
   { id: 'sp500', label: 'S&P 500', value: null, unit: undefined, change: null },
   { id: 'nasdaq', label: '나스닥 지수', value: null, unit: undefined, change: null },
   { id: 'dji', label: '다우존스', value: null, unit: undefined, change: null },
+  { id: 'nasdaq_futures', label: '나스닥 선물', value: null, unit: undefined, change: null },
   { id: 'nikkei', label: '니케이 225', value: null, unit: undefined, change: null }
 ];
 

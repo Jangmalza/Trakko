@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { Prisma, PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
 import multer from 'multer';
+import { startMarketCacheScheduler, getMarketCache, refreshMarketCache } from './services/marketCache.js';
 import PDFDocument from 'pdfkit';
 
 const prisma = new PrismaClient();
@@ -164,6 +165,8 @@ const ANNOUNCEMENT_STATUS_VALUES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 const ANNOUNCEMENT_STATUS_SET = new Set(ANNOUNCEMENT_STATUS_VALUES);
 const GOAL_PERIOD_VALUES = ['MONTHLY', 'ANNUAL'];
 const GOAL_PERIOD_SET = new Set(GOAL_PERIOD_VALUES);
+
+startMarketCacheScheduler();
 
 const SUPPORTED_CURRENCIES = new Set(['USD', 'KRW']);
 const TRADER_TYPE_VALUES = ['CRYPTO', 'US_STOCK', 'KR_STOCK'];
@@ -355,13 +358,10 @@ const formatDateForLocale = (date, locale) => {
 };
 
 const PDF_THEME = {
-  primary: '#0f172a',
-  accent: '#0ea5e9',
-  accentBackground: '#f0f9ff',
-  body: '#1e293b',
-  muted: '#64748b',
-  rule: '#e2e8f0',
-  heading: '#0f172a'
+  heading: '#1f2933',
+  body: '#243447',
+  muted: '#6c7a89',
+  rule: '#d9e2ec'
 };
 
 const getContentWidth = (doc) => doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -371,53 +371,32 @@ const drawDivider = (doc) => {
   doc.moveTo(doc.page.margins.left, doc.y)
     .lineTo(doc.page.margins.left + contentWidth, doc.y)
     .strokeColor(PDF_THEME.rule)
-    .lineWidth(1)
+    .lineWidth(0.6)
     .stroke();
-  doc.moveDown(0.3);
+  doc.moveDown(0.2);
   doc.strokeColor(PDF_THEME.body);
 };
 
 const drawSectionHeading = (doc, text) => {
-  doc.moveDown(0.6);
-  doc.fillColor(PDF_THEME.heading).fontSize(13).text(text);
-  doc.moveDown(0.2);
-  drawDivider(doc);
-  doc.fillColor(PDF_THEME.body).fontSize(11);
-};
-
-const drawMetricsGrid = (doc, metrics) => {
-  const contentWidth = getContentWidth(doc);
-  const columnWidth = (contentWidth - 24) / 2;
-
-  for (let i = 0; i < metrics.length; i += 2) {
-    const left = metrics[i];
-    const right = metrics[i + 1];
-    const rowY = doc.y;
-
-    if (left) {
-      doc.fontSize(9).fillColor(PDF_THEME.muted).text(left.label, doc.page.margins.left, rowY, { width: columnWidth });
-      doc.fontSize(13).fillColor(PDF_THEME.body).text(left.value, doc.page.margins.left, doc.y, { width: columnWidth });
-    }
-
-    let rowHeight = doc.y - rowY;
-
-    if (right) {
-      const rightX = doc.page.margins.left + columnWidth + 24;
-      doc.fontSize(9).fillColor(PDF_THEME.muted).text(right.label, rightX, rowY, { width: columnWidth });
-      doc.fontSize(13).fillColor(PDF_THEME.body).text(right.value, rightX, doc.y, { width: columnWidth });
-      rowHeight = Math.max(rowHeight, doc.y - rowY);
-    }
-
-    rowHeight = Number.isFinite(rowHeight) && rowHeight > 0 ? rowHeight : 24;
-    doc.y = rowY + rowHeight + 10;
-  }
-
-  doc.fillColor(PDF_THEME.body).fontSize(11);
+  doc.moveDown(0.25);
+  doc.fillColor(PDF_THEME.heading).fontSize(11).text(text);
+  doc.fillColor(PDF_THEME.body).fontSize(10);
   doc.moveDown(0.1);
 };
 
+const drawMetricsGrid = (doc, metrics) => {
+  metrics.forEach((metric) => {
+    doc.fontSize(8.5).fillColor(PDF_THEME.muted).text(metric.label);
+    doc.fontSize(11).fillColor(PDF_THEME.body).text(metric.value);
+    doc.moveDown(0.2);
+  });
 
-const ensurePageSpace = (doc, requiredHeight = 80) => {
+  doc.fillColor(PDF_THEME.body).fontSize(10);
+  doc.moveDown(0.2);
+};
+
+
+const ensurePageSpace = (doc, requiredHeight = 70) => {
   const remaining = doc.page.height - doc.page.margins.bottom - doc.y;
   if (remaining < requiredHeight) {
     doc.addPage();
@@ -673,136 +652,6 @@ function normalizeTraderType(value) {
   if (typeof value !== 'string') return 'KR_STOCK';
   const upper = value.toUpperCase().replace(/-/g, '_');
   return TRADER_TYPE_VALUES.includes(upper) ? upper : 'KR_STOCK';
-}
-
-const getDefaultQuote = (symbolConfig) => ({
-  id: symbolConfig.id,
-  label: symbolConfig.label,
-  price: null,
-  changePercent: null
-});
-
-const fetchCryptoQuotes = async (symbols, now) => {
-  if (symbols.length === 0) return;
-
-  const url = new URL('https://api.coingecko.com/api/v3/simple/price');
-  url.searchParams.set('ids', symbols.map((symbol) => symbol.coinId).join(','));
-  url.searchParams.set('vs_currencies', 'usd');
-  url.searchParams.set('include_24hr_change', 'true');
-
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`Coingecko request failed (${response.status})`);
-  }
-
-  const data = await response.json();
-  for (const symbol of symbols) {
-    const entry = data?.[symbol.coinId] ?? null;
-    const price = typeof entry?.usd === 'number' ? entry.usd : null;
-    const changePercent = typeof entry?.usd_24h_change === 'number' ? entry.usd_24h_change : null;
-    const quote = {
-      id: symbol.id,
-      label: symbol.label,
-      price,
-      changePercent
-    };
-    marketCache.set(symbol.id, { data: quote, fetchedAt: now });
-  }
-};
-
-const parseCsvLines = (csvText) =>
-  csvText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-const fetchStooqQuotes = async (symbols, now) => {
-  if (symbols.length === 0) return;
-
-  const query = symbols.map((symbol) => symbol.stooqSymbol.toLowerCase()).join(',');
-  const url = new URL('https://stooq.com/q/l/');
-  url.searchParams.set('s', query);
-  url.searchParams.set('f', 'sd2t2ohlc');
-  url.searchParams.set('h', '');
-  url.searchParams.set('e', 'csv');
-
-  const response = await fetch(url.toString());
-  if (!response.ok) {
-    throw new Error(`Stooq request failed (${response.status})`);
-  }
-
-  const text = await response.text();
-  const lines = parseCsvLines(text);
-  if (lines.length <= 1) {
-    throw new Error('Stooq response did not contain any rows');
-  }
-
-  const symbolMap = new Map(symbols.map((symbol) => [symbol.stooqSymbol.toLowerCase(), symbol]));
-
-  for (let i = 1; i < lines.length; i += 1) {
-    const row = lines[i];
-    const parts = row.split(',');
-    if (parts.length < 7) continue;
-    const rawSymbol = parts[0]?.trim().toLowerCase();
-    if (!rawSymbol || !symbolMap.has(rawSymbol)) continue;
-
-    const config = symbolMap.get(rawSymbol);
-    const open = Number.parseFloat(parts[3]);
-    const close = Number.parseFloat(parts[6]);
-    const price = Number.isFinite(close) ? close : null;
-
-    let changePercent = null;
-    if (Number.isFinite(close) && Number.isFinite(open)) {
-      if (open === 0) {
-        changePercent = null;
-      } else {
-        changePercent = ((close - open) / open) * 100;
-      }
-    }
-
-    const quote = {
-      id: config.id,
-      label: config.label,
-      price,
-      changePercent
-    };
-
-    marketCache.set(config.id, { data: quote, fetchedAt: now });
-  }
-};
-
-async function fetchMarketQuotes() {
-  const now = Date.now();
-  const staleSymbols = MARKET_SYMBOLS.filter((symbol) => {
-    const cached = marketCache.get(symbol.id);
-    return !cached || now - cached.fetchedAt >= MARKET_CACHE_TTL_MS;
-  });
-
-  if (staleSymbols.length > 0) {
-    const cryptoSymbols = staleSymbols.filter((symbol) => symbol.kind === 'crypto');
-    const stooqSymbols = staleSymbols.filter((symbol) => symbol.kind === 'stooq');
-
-    if (cryptoSymbols.length > 0) {
-      try {
-        await fetchCryptoQuotes(cryptoSymbols, now);
-      } catch (error) {
-        console.warn('Failed to fetch crypto quotes from Coingecko', error);
-      }
-    }
-
-    if (stooqSymbols.length > 0) {
-      try {
-        await fetchStooqQuotes(stooqSymbols, now);
-      } catch (error) {
-        console.warn('Failed to fetch index quotes from Stooq', error);
-      }
-    }
-  }
-
-  return MARKET_SYMBOLS.map((symbol) => {
-    const cached = marketCache.get(symbol.id);
-    return cached ? cached.data : getDefaultQuote(symbol);
-  });
 }
 
 async function ensureUserRecord(sessionUser) {
@@ -1906,12 +1755,24 @@ app.post('/api/profile/trader-type', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/markets/indices', async (_req, res) => {
+app.get('/api/markets/indices', async (req, res) => {
   try {
-    const quotes = await fetchMarketQuotes();
-    res.json(quotes);
+    const forceRefresh = req.query.refresh === '1';
+    const cache = getMarketCache();
+    if (forceRefresh || cache.quotes.length === 0) {
+      const refreshed = await refreshMarketCache();
+      if (refreshed.fetchedAt) {
+        res.set('X-Cache-Timestamp', refreshed.fetchedAt);
+      }
+      res.json(refreshed.quotes);
+      return;
+    }
+    if (cache.fetchedAt) {
+      res.set('X-Cache-Timestamp', cache.fetchedAt);
+    }
+    res.json(cache.quotes);
   } catch (error) {
-    console.error('Failed to fetch market quotes', error);
+    console.error('Failed to read market indices cache', error);
     res.status(503).json({ message: '시장 데이터를 불러오지 못했습니다.' });
   }
 });
@@ -2445,7 +2306,7 @@ app.post('/api/reports/performance', requireAuth, async (req, res) => {
       aiInsights = 'AI 인사이트를 생성하려면 OpenAI API 설정이 필요합니다.';
     }
 
-    const doc = new PDFDocument({ margin: 50 });
+    const doc = new PDFDocument({ margin: 45 });
     let activeReportFont = 'Helvetica';
     if (REPORT_FONT_AVAILABLE) {
       try {
@@ -2472,33 +2333,13 @@ app.post('/api/reports/performance', requireAuth, async (req, res) => {
     const displayName = userRecord.displayName || userRecord.email || sessionUser.displayName || 'Trakko User';
     const periodStartLabel = formatDateForLocale(rangeStartDate, resolvedLocale);
     const periodEndLabel = formatDateForLocale(rangeEndDate, resolvedLocale);
-    const contentWidth = getContentWidth(doc);
-
-    // Banner
-    const bannerHeight = 68;
-    const bannerX = doc.page.margins.left;
-    const bannerY = doc.y;
-    doc.save();
-    doc.roundedRect(bannerX, bannerY, contentWidth, bannerHeight, 12).fill(PDF_THEME.primary);
-    doc.fillColor('#ffffff')
-      .fontSize(20)
-      .text('Trakko Performance Report', bannerX + 18, bannerY + 18, { width: contentWidth - 36 });
-    doc.fontSize(12).text(`${periodStartLabel} ~ ${periodEndLabel}`, { width: contentWidth - 36 });
-    doc.restore();
-    doc.y = bannerY + bannerHeight + 18;
-
-    doc.fillColor(PDF_THEME.muted).fontSize(10).text(`생성 시각: ${generatedAt}`);
+    doc.fillColor(PDF_THEME.heading).fontSize(18).text('Trakko Performance Report');
+    doc.fillColor(PDF_THEME.muted).fontSize(10).text(`${periodStartLabel} ~ ${periodEndLabel}`);
+    doc.text(`생성 시각: ${generatedAt}`);
     doc.text(`기본 통화: ${normalizedCurrency} · 거래 유형: ${userRecord.traderType ?? 'UNKNOWN'}`);
-    doc.moveDown(0.4);
     drawDivider(doc);
 
     const summaryMetrics = [
-      {
-        label: '초기 시드 (설정)',
-        value: hasInitialSeed && initialSeedDisplay !== null
-          ? formatCurrencyForUser(initialSeedDisplay, normalizedCurrency, resolvedLocale)
-          : '입력되지 않음'
-      },
       {
         label: '기간 시작 자본',
         value: formatCurrencyForUser(periodStartCapitalDisplay, normalizedCurrency, resolvedLocale)
@@ -2512,6 +2353,10 @@ app.post('/api/reports/performance', requireAuth, async (req, res) => {
         value: formatCurrencyForUser(periodPnLDisplay, normalizedCurrency, resolvedLocale)
       },
       {
+        label: '누적 손익',
+        value: formatCurrencyForUser(cumulativePnLDisplay, normalizedCurrency, resolvedLocale)
+      },
+      {
         label: '총 거래 수',
         value: `${totalTrades}건`
       },
@@ -2521,25 +2366,27 @@ app.post('/api/reports/performance', requireAuth, async (req, res) => {
       }
     ];
 
-    ensurePageSpace(doc, 180);
-    drawSectionHeading(doc, '핵심 지표');
+    ensurePageSpace(doc, 140);
+    drawSectionHeading(doc, '요약');
     drawMetricsGrid(doc, summaryMetrics);
 
-    ensurePageSpace(doc, 140);
-    drawSectionHeading(doc, '목표 상태');
+    if (hasInitialSeed && initialSeedDisplay !== null) {
+      doc.fillColor(PDF_THEME.muted).fontSize(9).text(`기본 시드는 ${formatCurrencyForUser(initialSeedDisplay, normalizedCurrency, resolvedLocale)} 로 설정되었습니다.`);
+      doc.fillColor(PDF_THEME.body).fontSize(10);
+      doc.moveDown(0.15);
+    }
+
     if (latestGoal) {
+      ensurePageSpace(doc, 100);
+      drawSectionHeading(doc, '목표');
       const goalPeriodLabel = latestGoal.period === 'ANNUAL'
         ? `${latestGoal.targetYear}년 연간 목표`
         : `${latestGoal.targetYear}년 ${latestGoal.targetMonth}월 목표`;
-      doc.fillColor(PDF_THEME.body).text(`목표 구간: ${goalPeriodLabel}`);
-      doc.text(`목표 금액: ${formatCurrencyForUser(latestGoalAmountDisplay ?? 0, normalizedCurrency, resolvedLocale)}`);
-      doc.text(`목표 통화: ${latestGoal.currency}`);
-    } else {
-      doc.fillColor(PDF_THEME.muted).text('설정된 목표가 없습니다. 목표를 추가해 진행 상황을 추적해 보세요.');
+      doc.text(`${goalPeriodLabel} · ${formatCurrencyForUser(latestGoalAmountDisplay ?? 0, normalizedCurrency, resolvedLocale)} (${latestGoal.currency})`);
+      doc.moveDown(0.2);
     }
-    doc.fillColor(PDF_THEME.body).moveDown(0.3);
 
-    ensurePageSpace(doc, 200);
+    ensurePageSpace(doc, 120);
     drawSectionHeading(doc, 'AI 인사이트');
     aiInsights
       .split(/\n+/)
@@ -2547,9 +2394,9 @@ app.post('/api/reports/performance', requireAuth, async (req, res) => {
       .filter((line) => line.length > 0)
       .forEach((line) => {
         doc.fillColor(PDF_THEME.body).text(line);
-        doc.moveDown(0.2);
+        doc.moveDown(0.15);
       });
-    doc.moveDown(0.25);
+    doc.moveDown(0.2);
 
     const groupSectionTitle = (() => {
       switch (granularity) {
