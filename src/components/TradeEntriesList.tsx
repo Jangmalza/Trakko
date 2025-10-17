@@ -98,6 +98,11 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
     )
   ), [filteredTrades]);
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDateRange('all');
+  };
+
   const [editingTrade, setEditingTrade] = useState<TradeEntry | null>(null);
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
@@ -383,9 +388,18 @@ const TradeEntriesList: React.FC<TradeEntriesListProps> = ({ initialSeed, trades
               );
             })}
             {filtersActive && (
-              <span className="ml-auto text-[11px] text-slate-400 dark:text-slate-500">
-                표시 중 {filteredTrades.length}건 / 총 {sortedTrades.length}건, 손익 {formatSignedCurrency(filteredTotalPnL)} ({currency})
-              </span>
+              <div className="ml-auto flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                <span>
+                  표시 중 {filteredTrades.length}건 / 총 {sortedTrades.length}건, 손익 {formatSignedCurrency(filteredTotalPnL)} ({currency})
+                </span>
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="rounded-full border border-slate-300 px-3 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                >
+                  필터 초기화
+                </button>
+              </div>
             )}
           </div>
         </div>
