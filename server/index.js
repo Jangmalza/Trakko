@@ -742,7 +742,7 @@ async function getUserWithRelations(userId) {
     include: {
       preferences: true,
       trades: {
-        orderBy: { tradeDate: 'asc' }
+        orderBy: { tradeDate: 'desc' }
       }
     }
   });

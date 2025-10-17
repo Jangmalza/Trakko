@@ -104,10 +104,10 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
     try {
       const currency = usePreferencesStore.getState().currency;
       const trade = await createTradeEntry({ ...payload, currency });
-     set((state) => {
-       const updatedTrades = [...state.trades, trade].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
-       return {
-         trades: updatedTrades,
+      set((state) => {
+        const updatedTrades = [...state.trades, trade].sort((a, b) => b.tradeDate.localeCompare(a.tradeDate));
+        return {
+          trades: updatedTrades,
           loading: false,
           hasLoaded: true,
           error: null
@@ -129,7 +129,7 @@ export const usePortfolioStore = create<PortfolioState>((set, get) => ({
       set((state) => {
         const updatedTrades = state.trades
           .map((trade) => (trade.id === tradeId ? updated : trade))
-          .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+          .sort((a, b) => b.tradeDate.localeCompare(a.tradeDate));
         return {
           trades: updatedTrades,
           loading: false,

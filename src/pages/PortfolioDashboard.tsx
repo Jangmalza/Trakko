@@ -164,6 +164,9 @@ const PortfolioDashboard: React.FC = () => {
     });
   }, [trades, isProUser]);
 
+  const dashboardTrades = useMemo(() => filteredTrades.slice(0, 10), [filteredTrades]);
+  const hasMoreTrades = filteredTrades.length > dashboardTrades.length;
+
   const adjustedInitialSeed = useMemo(() => {
     if (initialSeed === null) return null;
     if (isProUser) return initialSeed;
@@ -362,7 +365,12 @@ const PortfolioDashboard: React.FC = () => {
                   </Link>
                 </section>
               )}
-              <TradeEntriesList initialSeed={(adjustedInitialSeed ?? initialSeed)!} trades={filteredTrades} />
+              <TradeEntriesList initialSeed={(adjustedInitialSeed ?? initialSeed)!} trades={dashboardTrades} />
+              {hasMoreTrades && (
+                <p className="text-right text-[11px] text-slate-500 dark:text-slate-400">
+                  최근 10개 거래만 표시됩니다. 전체 내역은 <Link to="/trades" className="font-semibold text-slate-700 underline dark:text-slate-200">거래 기록</Link>에서 확인하세요.
+                </p>
+              )}
             </div>
           </main>
         )}
